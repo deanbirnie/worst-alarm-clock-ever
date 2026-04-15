@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Worst Alarm</string>
+    <string name="alarm_channel_name">Alarm</string>
+    <string name="alarm_channel_description">Wake-up alarm notifications</string>
+    <string name="alarm_notification_title">Alarm ringing</string>
+    <string name="alarm_notification_text">Go scan the next barcode</string>
+</resources>

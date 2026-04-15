@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple alarm-bell style glyph on transparent background -->
+    <path
+        android:fillColor="#FF5555"
+        android:pathData="M54,28 C43,28 34,37 34,48 L34,62 L30,70 L78,70 L74,62 L74,48 C74,37 65,28 54,28 Z" />
+    <path
+        android:fillColor="#FF5555"
+        android:pathData="M48,74 L60,74 C60,78 57,81 54,81 C51,81 48,78 48,74 Z" />
+    <path
+        android:fillColor="#FFAAAA"
+        android:pathData="M52,22 L56,22 L56,28 L52,28 Z" />
+</vector>

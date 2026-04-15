@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.WorstAlarm" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.WorstAlarm.FullScreen" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+    </style>
+</resources>
