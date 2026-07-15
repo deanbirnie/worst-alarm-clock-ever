@@ -50,11 +50,15 @@ fun AlarmRingingRoot(state: AlarmSession.State?) {
     val context = LocalContext.current
     var panel by remember { mutableStateOf(Panel.Ringing) }
 
-    // When the active step changes, snap back to the Ringing panel (we want the user to see
-    // the new location label before they scan).
-    LaunchedEffect(state?.currentStepIndex, state?.inEmergencyMode, state?.isRingingNow) {
-        if (state?.inEmergencyMode == true) panel = Panel.Emergency
-        else if (panel == Panel.Emergency) panel = Panel.Ringing
+    // When the active step changes (scan accepted) or emergency mode toggles, snap back to
+    // the Ringing panel so the user sees the next location label + countdown instead of
+    // staying on the camera pointed at a barcode that no longer counts.
+    LaunchedEffect(state?.currentStepIndex, state?.inEmergencyMode) {
+        panel = when {
+            state == null -> Panel.Ringing
+            state.inEmergencyMode -> Panel.Emergency
+            else -> Panel.Ringing
+        }
     }
 
     WorstAlarmTheme {
