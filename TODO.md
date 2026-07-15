@@ -48,7 +48,7 @@ things only when they're verified working.
 - [x] First-launch intro dialog explaining the path mechanism, with a "Do not show this again" checkbox (checked by default)
 - [x] Random QR code generator: create one or several codes, add them to the library, share/print as PNG
 - [x] About screen: app version, developer contact, source link, feature-suggestion box
-- [ ] CI green on the v0.2 changes
+- [x] CI green on the v0.2 changes
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)
