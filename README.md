@@ -56,6 +56,16 @@ in the persistent notification.
 - **Offline barcode scanning** — Google ML Kit with the bundled model:
   QR, EAN-13/8, UPC-A/E, Code 128/39/93, Codabar, ITF, PDF417, Aztec,
   Data Matrix. No internet needed, ever.
+- **Custom alarm sounds** — pick any audio file on the device, globally in
+  Settings or per alarm; falls back to the system alarm tone if the file
+  goes missing.
+- **QR generator** — create random QR codes in-app, add them straight to
+  your library, and share/print the PNG (tape one to the bathroom mirror, or
+  set one as your PC wallpaper so you must log in before you can scan it).
+- **Locations, decoupled** — barcodes can carry an optional location
+  ("Kitchen"); picking a location in the alarm editor auto-selects its
+  barcode when only one lives there.
+- **Warm sunrise theme** — muted ambers and dusky roses, easy on 6 AM eyes.
 - **Emergency escape hatch** — for genuine emergencies there is exactly one
   way out without scanning: a mini-game that requires tapping the lit square
   on a 4×4 grid **500 times**. Going idle for 30 seconds aborts the attempt

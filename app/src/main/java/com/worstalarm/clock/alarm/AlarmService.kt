@@ -25,6 +25,7 @@ import com.worstalarm.clock.WorstAlarmApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class AlarmService : Service() {
@@ -34,6 +35,9 @@ class AlarmService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private val nextRingRunnable = Runnable { ringCurrentStep() }
+
+    /** Tone for the current session: per-alarm override, else the global Settings tone. */
+    private var customToneUri: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -86,6 +90,8 @@ class AlarmService : Service() {
                 stopSelfSafely()
                 return@launch
             }
+            customToneUri = alarm.alarm.ringtoneUri
+                ?: withIO { app.settings.globalRingtoneUri.first() }
             AlarmSession.start(alarm)
             ringCurrentStep()
         }
@@ -97,7 +103,7 @@ class AlarmService : Service() {
         startAudioAndVibration()
         updateNotification(
             "Alarm ringing",
-            "Scan: ${s.currentStep.step.locationLabel}"
+            "Scan: ${s.currentStep.displayName}"
         )
     }
 
@@ -121,7 +127,7 @@ class AlarmService : Service() {
             )
         }
         updateNotification(
-            "Next: ${AlarmSession.state.value?.currentStep?.step?.locationLabel ?: ""}",
+            "Next: ${AlarmSession.state.value?.currentStep?.displayName ?: ""}",
             "Rings in ${step.timeToNextRingSeconds}s"
         )
         handler.removeCallbacks(nextRingRunnable)
@@ -173,22 +179,38 @@ class AlarmService : Service() {
 
     private fun startAudioAndVibration() {
         if (player?.isPlaying == true) return
-        val uri: Uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        try {
-            player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                setDataSource(this@AlarmService, uri)
-                isLooping = true
-                prepare()
-                start()
+        // Try the user's custom tone first (per-alarm, then global — resolved into
+        // customToneUri at ring time); if it's missing/unreadable, fall back to the
+        // system alarm sound so the alarm always makes noise.
+        val candidates = buildList {
+            customToneUri?.let { runCatching { add(Uri.parse(it)) } }
+            RingtoneManager.getActualDefaultRingtoneUri(
+                this@AlarmService, RingtoneManager.TYPE_ALARM
+            )?.let { add(it) }
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)?.let { add(it) }
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)?.let { add(it) }
+        }
+        for (uri in candidates) {
+            try {
+                player = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    setDataSource(this@AlarmService, uri)
+                    isLooping = true
+                    prepare()
+                    start()
+                }
+                break
+            } catch (_: Throwable) {
+                try { player?.release() } catch (_: Throwable) {}
+                player = null
             }
+        }
+        if (player != null) {
             // Max alarm volume so the user actually wakes up.
             val am = getSystemService(AudioManager::class.java)
             am?.setStreamVolume(
@@ -196,7 +218,7 @@ class AlarmService : Service() {
                 am.getStreamMaxVolume(AudioManager.STREAM_ALARM),
                 0
             )
-        } catch (_: Throwable) { /* ignore — vibration still fires */ }
+        }
 
         startVibration()
     }

@@ -6,6 +6,10 @@ import androidx.room.PrimaryKey
 /**
  * Days-of-week bitmask: bit 0 = Monday ... bit 6 = Sunday.
  * 0 means "one-shot" (fires next occurrence of [hour]:[minute] and disables itself).
+ *
+ * [ringtoneUri] overrides the alarm sound for this alarm only (a content:// URI the
+ * user picked via SAF). Null means "use the global sound from Settings", which in
+ * turn falls back to the system default alarm tone.
  */
 @Entity(tableName = "alarms")
 data class AlarmEntity(
@@ -14,5 +18,6 @@ data class AlarmEntity(
     val hour: Int,
     val minute: Int,
     val daysMask: Int,
-    val enabled: Boolean
+    val enabled: Boolean,
+    val ringtoneUri: String? = null
 )

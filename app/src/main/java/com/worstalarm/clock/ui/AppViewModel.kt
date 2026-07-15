@@ -18,11 +18,26 @@ import kotlinx.coroutines.withContext
 /** Shared application-level view model. Exposes the repository Flows and commits mutations. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val repo: Repository = (app as WorstAlarmApp).repository
+    private val worstApp = app as WorstAlarmApp
+    private val repo: Repository = worstApp.repository
+    private val settings = worstApp.settings
     private val appContext = app.applicationContext
 
     fun alarms(): Flow<List<AlarmWithSteps>> = repo.observeAlarms()
     fun barcodes(): Flow<List<BarcodeEntity>> = repo.observeBarcodes()
+
+    // ----- App settings -----
+
+    val introSeen: Flow<Boolean> = settings.introSeen
+    val globalRingtone: Flow<String?> = settings.globalRingtoneUri
+
+    fun setIntroSeen(seen: Boolean) {
+        viewModelScope.launch { settings.setIntroSeen(seen) }
+    }
+
+    fun setGlobalRingtone(uri: String?) {
+        viewModelScope.launch { settings.setGlobalRingtoneUri(uri) }
+    }
 
     suspend fun loadAlarm(id: Long): AlarmWithSteps? = withContext(Dispatchers.IO) {
         repo.getAlarm(id)

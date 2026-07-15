@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,13 +45,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.worstalarm.clock.data.entity.AlarmEntity
 import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.data.entity.RoutineStepEntity
 import com.worstalarm.clock.ui.AppViewModel
+import com.worstalarm.clock.ui.settings.AlarmTonePickerRow
 
 private data class UiStep(
     val locationLabel: String,
@@ -72,8 +75,10 @@ fun AlarmEditScreen(
     var minute by remember { mutableStateOf(0) }
     var daysMask by remember { mutableStateOf(0b0011111) /* Mon-Fri */ }
     var enabled by remember { mutableStateOf(true) }
+    var ringtoneUri by remember { mutableStateOf<String?>(null) }
     var steps by remember { mutableStateOf(listOf<UiStep>()) }
     var loaded by remember { mutableStateOf(alarmId == 0L) }
+    var showMultiStepWarning by remember { mutableStateOf(false) }
 
     LaunchedEffect(alarmId) {
         if (alarmId != 0L) {
@@ -84,6 +89,7 @@ fun AlarmEditScreen(
                 minute = existing.alarm.minute
                 daysMask = existing.alarm.daysMask
                 enabled = existing.alarm.enabled
+                ringtoneUri = existing.alarm.ringtoneUri
                 steps = existing.orderedSteps.map {
                     UiStep(
                         locationLabel = it.step.locationLabel,
@@ -97,7 +103,45 @@ fun AlarmEditScreen(
         }
     }
 
-    val canSave = loaded && steps.isNotEmpty() && steps.all { it.barcodeId != 0L && it.locationLabel.isNotBlank() }
+    // Location is optional now — only a chosen barcode is required per step.
+    val canSave = loaded && steps.isNotEmpty() && steps.all { it.barcodeId != 0L }
+
+    fun addStep() {
+        // A one-barcode library needs no picking — preselect it.
+        val only = barcodes.singleOrNull()
+        steps = steps + UiStep(
+            locationLabel = only?.location.orEmpty(),
+            barcodeId = only?.id ?: 0L,
+            barcodeName = only?.name.orEmpty(),
+            timeToNextSeconds = 180
+        )
+    }
+
+    if (showMultiStepWarning) {
+        AlertDialog(
+            onDismissRequest = { showMultiStepWarning = false },
+            title = { Text("Adding a second location") },
+            text = {
+                Text(
+                    "With more than one location, your phone stays locked to the alarm " +
+                        "between steps — you won't be able to use it normally until the " +
+                        "final location's barcode is scanned.\n\n" +
+                        "If you need out early, you can scan ahead through your path " +
+                        "without waiting for the pauses, or use the Emergency stop " +
+                        "(500 taps)."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showMultiStepWarning = false
+                    addStep()
+                }) { Text("Add location") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMultiStepWarning = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -118,7 +162,8 @@ fun AlarmEditScreen(
                                 hour = hour,
                                 minute = minute,
                                 daysMask = daysMask,
-                                enabled = enabled
+                                enabled = enabled,
+                                ringtoneUri = ringtoneUri
                             )
                             val entities = steps.mapIndexed { idx, s ->
                                 RoutineStepEntity(
@@ -182,10 +227,21 @@ fun AlarmEditScreen(
                 )
             }
 
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    AlarmTonePickerRow(
+                        title = "Alarm sound (this alarm)",
+                        defaultLabel = "Use the global sound from Settings",
+                        currentUri = ringtoneUri,
+                        onPicked = { ringtoneUri = it }
+                    )
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
             Text("Routine locations (in order)", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Each ring stops when you scan that location's barcode. After a scan, the alarm waits the configured duration, then rings the next location.",
+                "Each ring stops when you scan that step's barcode. After a scan, the alarm waits the configured duration, then rings the next step.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -206,12 +262,8 @@ fun AlarmEditScreen(
             OutlinedButton(
                 enabled = barcodes.isNotEmpty(),
                 onClick = {
-                    steps = steps + UiStep(
-                        locationLabel = "Location ${steps.size + 1}",
-                        barcodeId = 0L,
-                        barcodeName = "",
-                        timeToNextSeconds = 180
-                    )
+                    if (steps.size == 1) showMultiStepWarning = true
+                    else addStep()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -240,7 +292,12 @@ private fun StepCard(
     onChange: (UiStep) -> Unit,
     onDelete: () -> Unit
 ) {
-    var showPicker by remember { mutableStateOf(false) }
+    var showBarcodePicker by remember { mutableStateOf(false) }
+    var showLocationPicker by remember { mutableStateOf(false) }
+    val knownLocations = remember(barcodes) {
+        barcodes.map { it.location }.filter { it.isNotBlank() }.distinct()
+    }
+
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -250,17 +307,10 @@ private fun StepCard(
                     Icon(Icons.Default.Delete, contentDescription = "Remove step")
                 }
             }
-            OutlinedTextField(
-                value = step.locationLabel,
-                onValueChange = { onChange(step.copy(locationLabel = it)) },
-                label = { Text("Location name (e.g. Kitchen)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
 
             Row {
                 AssistChip(
-                    onClick = { showPicker = true },
+                    onClick = { showBarcodePicker = true },
                     label = {
                         Text(
                             if (step.barcodeId == 0L) "Choose barcode"
@@ -269,20 +319,74 @@ private fun StepCard(
                     }
                 )
                 DropdownMenu(
-                    expanded = showPicker,
-                    onDismissRequest = { showPicker = false }
+                    expanded = showBarcodePicker,
+                    onDismissRequest = { showBarcodePicker = false }
                 ) {
                     barcodes.forEach { b ->
                         DropdownMenuItem(
-                            text = { Text(b.name.ifBlank { b.rawValue }) },
+                            text = {
+                                Text(
+                                    b.name.ifBlank { b.rawValue } +
+                                        if (b.location.isNotBlank()) " (${b.location})" else ""
+                                )
+                            },
                             onClick = {
-                                onChange(step.copy(barcodeId = b.id, barcodeName = b.name))
-                                showPicker = false
+                                // Picking a barcode fills in its library location when
+                                // the step doesn't have one yet.
+                                onChange(
+                                    step.copy(
+                                        barcodeId = b.id,
+                                        barcodeName = b.name,
+                                        locationLabel = step.locationLabel.ifBlank { b.location }
+                                    )
+                                )
+                                showBarcodePicker = false
                             }
                         )
                     }
                 }
             }
+
+            OutlinedTextField(
+                value = step.locationLabel,
+                onValueChange = { onChange(step.copy(locationLabel = it)) },
+                label = { Text("Location (optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    if (knownLocations.isNotEmpty()) {
+                        IconButton(onClick = { showLocationPicker = true }) {
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Pick a known location"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showLocationPicker,
+                            onDismissRequest = { showLocationPicker = false }
+                        ) {
+                            knownLocations.forEach { loc ->
+                                DropdownMenuItem(
+                                    text = { Text(loc) },
+                                    onClick = {
+                                        // Picking a location auto-selects its barcode
+                                        // when exactly one lives there.
+                                        val matches = barcodes.filter { it.location == loc }
+                                        val updated = step.copy(locationLabel = loc)
+                                        onChange(
+                                            if (matches.size == 1) updated.copy(
+                                                barcodeId = matches[0].id,
+                                                barcodeName = matches[0].name
+                                            ) else updated
+                                        )
+                                        showLocationPicker = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            )
 
             if (!isLast) {
                 var minutesText by remember(step) {

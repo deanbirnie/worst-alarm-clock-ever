@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -149,7 +151,8 @@ private fun RingingPanel(
     onEmergency: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        // systemBarsPadding keeps the big buttons clear of the gesture-navigation bar.
+        Modifier.fillMaxSize().systemBarsPadding().padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -174,7 +177,7 @@ private fun RingingPanel(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                state.currentStep.step.locationLabel,
+                state.currentStep.displayName,
                 fontSize = 44.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -261,10 +264,10 @@ private fun ScanningPanel(
             }
         }
         Column(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Looking for: ${state.currentStep.step.locationLabel}")
+            Text("Looking for: ${state.currentStep.displayName}")
             Text(
                 "Barcode: ${expected.name}",
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)

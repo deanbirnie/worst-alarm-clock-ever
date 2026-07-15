@@ -33,6 +33,24 @@ things only when they're verified working.
 - [ ] Verify CI build is green and the artifact APK installs + runs on a real phone
 - [x] Documentation: README (concept, features, architecture), BUILDING.md (APK how-to), RELEASING.md (signing, Play Store, maintenance)
 
+## Phase 2.5 — v0.2 UX & feature batch (requested 2026-07-15)
+
+- [x] Warm sunrise colour theme (dark + light), muted rather than bright
+- [x] Move SCAN / EMERGENCY buttons clear of the gesture-navigation bar overlap
+- [x] Keep the transparent red wrong-barcode flash (unchanged, by design)
+- [x] Decouple barcode from location: optional location on library barcodes; location optional on alarm steps
+- [x] Auto-select: picking a location with exactly one matching barcode selects that barcode; picking a barcode fills in its location; a single-barcode library preselects automatically
+- [x] Custom alarm tone from a device audio file — global default in Settings
+- [x] Custom alarm tone per alarm (falls back to global, then the system alarm sound)
+- [x] Hamburger menu (navigation drawer): Barcode library, QR generator, Settings, About
+- [x] Settings screen: global alarm sound picker, re-show welcome message
+- [x] Warn when adding a second location that the phone is unusable until the final barcode is scanned (scan ahead early, or use Emergency stop)
+- [x] First-launch intro dialog explaining the path mechanism, with a "Do not show this again" checkbox (checked by default)
+- [x] Random QR code generator: create one or several codes, add them to the library, share/print as PNG
+- [x] About screen: app version, developer contact, source link, feature-suggestion box
+- [ ] CI green on the v0.2 changes
+- [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 - [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)
