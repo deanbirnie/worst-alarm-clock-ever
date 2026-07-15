@@ -12,9 +12,7 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -33,8 +31,6 @@ class AlarmService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var player: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private val nextRingRunnable = Runnable { ringCurrentStep() }
 
     /** Tone for the current session: per-alarm override, else the global Settings tone. */
     private var customToneUri: String? = null
@@ -64,6 +60,7 @@ class AlarmService : Service() {
 
         when (intent?.action) {
             ACTION_RING -> handleRing(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
+            ACTION_STEP_RING -> handleStepRing(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
             ACTION_SCAN_SUCCESS -> handleScanSuccess()
             ACTION_ENTER_EMERGENCY -> handleEnterEmergency()
             ACTION_EXIT_EMERGENCY -> handleExitEmergency()
@@ -130,12 +127,28 @@ class AlarmService : Service() {
             "Next: ${AlarmSession.state.value?.currentStep?.displayName ?: ""}",
             "Rings in ${step.timeToNextRingSeconds}s"
         )
-        handler.removeCallbacks(nextRingRunnable)
-        handler.postDelayed(nextRingRunnable, step.timeToNextRingSeconds * 1000L)
+        // AlarmManager, not a Handler: a Handler's delay clock pauses in deep sleep, so
+        // with the screen off the next ring would wait until the user woke the phone.
+        AlarmScheduler.scheduleStepRing(this, s.alarmWithSteps.alarm.id, nextAt)
+    }
+
+    /** The between-step pause ended (delivered by AlarmManager, waking the device). */
+    private fun handleStepRing(alarmId: Long) {
+        if (AlarmSession.isActive) {
+            ringCurrentStep()
+        } else if (alarmId > 0) {
+            // Process was killed mid-routine — restart the routine from the top rather
+            // than staying silent.
+            handleRing(alarmId)
+        } else {
+            stopSelfSafely()
+        }
     }
 
     private fun handleEnterEmergency() {
-        handler.removeCallbacks(nextRingRunnable)
+        AlarmSession.state.value?.let {
+            AlarmScheduler.cancelStepRing(this, it.alarmWithSteps.alarm.id)
+        }
         stopAudioAndVibration()
         AlarmSession.update { it.copy(inEmergencyMode = true, isRingingNow = false) }
         updateNotification("Emergency mode", "Complete the taps to disarm")
@@ -148,12 +161,12 @@ class AlarmService : Service() {
     }
 
     private fun disarmAndStop() {
-        handler.removeCallbacks(nextRingRunnable)
         stopAudioAndVibration()
 
         // Reschedule if recurring.
         val s = AlarmSession.state.value
         if (s != null) {
+            AlarmScheduler.cancelStepRing(this, s.alarmWithSteps.alarm.id)
             val alarm = s.alarmWithSteps.alarm
             if (alarm.daysMask != 0) {
                 AlarmScheduler.schedule(this, alarm)
@@ -280,7 +293,8 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(nextRingRunnable)
+        // Deliberately do NOT cancel a pending step ring here: if the OS kills the
+        // service mid-countdown, the AlarmManager alarm survives and restarts us.
         stopAudioAndVibration()
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
@@ -292,6 +306,7 @@ class AlarmService : Service() {
 
     companion object {
         const val ACTION_RING = "com.worstalarm.RING"
+        const val ACTION_STEP_RING = "com.worstalarm.STEP_RING"
         const val ACTION_SCAN_SUCCESS = "com.worstalarm.SCAN_SUCCESS"
         const val ACTION_ENTER_EMERGENCY = "com.worstalarm.ENTER_EMERGENCY"
         const val ACTION_EXIT_EMERGENCY = "com.worstalarm.EXIT_EMERGENCY"

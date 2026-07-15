@@ -8,9 +8,10 @@ import androidx.core.content.ContextCompat
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val alarmId = AlarmScheduler.alarmIdFromIntent(intent) ?: return
+        val isStepRing = intent?.action == AlarmScheduler.ACTION_STEP_RING
 
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
-            action = AlarmService.ACTION_RING
+            action = if (isStepRing) AlarmService.ACTION_STEP_RING else AlarmService.ACTION_RING
             putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
         }
         ContextCompat.startForegroundService(context, serviceIntent)

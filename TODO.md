@@ -49,6 +49,11 @@ things only when they're verified working.
 - [x] Random QR code generator: create one or several codes, add them to the library, share/print as PNG
 - [x] About screen: app version, developer contact, source link, feature-suggestion box
 - [x] CI green on the v0.2 changes
+- [x] Fix (0.2.1): next-step ring didn't fire with the screen off — the between-step
+      countdown ran on a Handler whose clock pauses in deep sleep, so the ring waited
+      until the phone was woken. Step rings are now armed via `AlarmManager.setAlarmClock`,
+      which wakes the device exactly on time (and survives the process being killed
+      mid-routine)
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)
