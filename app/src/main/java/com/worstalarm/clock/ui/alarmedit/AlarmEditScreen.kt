@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,6 +49,7 @@ import com.worstalarm.clock.data.entity.AlarmEntity
 import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.data.entity.RoutineStepEntity
 import com.worstalarm.clock.ui.AppViewModel
+import com.worstalarm.clock.ui.components.NumberStepperField
 import com.worstalarm.clock.ui.settings.AlarmTonePickerRow
 
 private data class UiStep(
@@ -389,38 +388,28 @@ private fun StepCard(
             )
 
             if (!isLast) {
-                var minutesText by remember(step) {
-                    mutableStateOf((step.timeToNextSeconds / 60).toString())
-                }
-                var secondsText by remember(step) {
-                    mutableStateOf((step.timeToNextSeconds % 60).toString())
-                }
+                val minutesValue = step.timeToNextSeconds / 60
+                val secondsValue = step.timeToNextSeconds % 60
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = minutesText,
-                        onValueChange = {
-                            minutesText = it.filter(Char::isDigit)
-                            val total = (minutesText.toIntOrNull() ?: 0) * 60 +
-                                (secondsText.toIntOrNull() ?: 0)
-                            onChange(step.copy(timeToNextSeconds = total))
+                    NumberStepperField(
+                        value = minutesValue,
+                        onValueChange = { newMin ->
+                            onChange(step.copy(timeToNextSeconds = newMin * 60 + secondsValue))
                         },
-                        label = { Text("Min") },
+                        label = "Min",
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        min = 0,
+                        max = 999
                     )
-                    OutlinedTextField(
-                        value = secondsText,
-                        onValueChange = {
-                            secondsText = it.filter(Char::isDigit)
-                            val total = (minutesText.toIntOrNull() ?: 0) * 60 +
-                                (secondsText.toIntOrNull() ?: 0)
-                            onChange(step.copy(timeToNextSeconds = total))
+                    NumberStepperField(
+                        value = secondsValue,
+                        onValueChange = { newSec ->
+                            onChange(step.copy(timeToNextSeconds = minutesValue * 60 + newSec))
                         },
-                        label = { Text("Sec") },
+                        label = "Sec",
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        min = 0,
+                        max = 59
                     )
                 }
                 Text(

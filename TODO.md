@@ -54,6 +54,9 @@ things only when they're verified working.
       until the phone was woken. Step rings are now armed via `AlarmManager.setAlarmClock`,
       which wakes the device exactly on time (and survives the process being killed
       mid-routine)
+- [x] Fix (0.2.2): step-delay Min/Sec inputs now have -/+ stepper buttons, and tapping
+      into the field selects its whole value so typing replaces it outright instead of
+      leaving a stray leading "0"
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)
