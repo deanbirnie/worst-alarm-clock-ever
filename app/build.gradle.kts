@@ -12,8 +12,8 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -91,6 +91,12 @@ dependencies {
 
     // Accompanist permissions (simpler runtime permission flow in Compose)
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+    // Settings storage (global alarm tone, intro-seen flag)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // QR code generation (offline, for the printable-code generator)
+    implementation("com.google.zxing:core:3.5.3")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

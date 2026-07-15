@@ -20,7 +20,11 @@ data class StepWithBarcode(
         entityColumn = "id"
     )
     val barcode: BarcodeEntity
-)
+) {
+    /** What to call this step in UI/notifications: the location if set, else the barcode name. */
+    val displayName: String
+        get() = step.locationLabel.ifBlank { barcode.location.ifBlank { barcode.name } }
+}
 
 data class AlarmWithSteps(
     @Embedded val alarm: AlarmEntity,

@@ -6,11 +6,13 @@ import android.app.NotificationManager
 import android.os.Build
 import com.worstalarm.clock.data.AppDatabase
 import com.worstalarm.clock.data.Repository
+import com.worstalarm.clock.data.SettingsRepository
 
 class WorstAlarmApp : Application() {
 
     val database: AppDatabase by lazy { AppDatabase.get(this) }
     val repository: Repository by lazy { Repository(database.alarmDao(), database.barcodeDao()) }
+    val settings: SettingsRepository by lazy { SettingsRepository(this) }
 
     override fun onCreate() {
         super.onCreate()

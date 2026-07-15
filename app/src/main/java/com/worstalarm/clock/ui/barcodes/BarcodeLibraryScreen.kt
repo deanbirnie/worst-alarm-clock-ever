@@ -136,7 +136,8 @@ private fun BarcodeRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Format: ${formatName(barcode.format)}",
+                    "Format: ${formatName(barcode.format)}" +
+                        if (barcode.location.isNotBlank()) " · ${barcode.location}" else "",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -158,6 +159,7 @@ private fun BarcodeEditorDialog(
     var name by remember { mutableStateOf(initial.name) }
     var rawValue by remember { mutableStateOf(initial.rawValue) }
     var format by remember { mutableStateOf(initial.format) }
+    var location by remember { mutableStateOf(initial.location) }
     var scanning by remember { mutableStateOf(false) }
 
     val cameraPermission = rememberPermissionState(android.Manifest.permission.CAMERA)
@@ -167,7 +169,16 @@ private fun BarcodeEditorDialog(
         confirmButton = {
             Button(
                 enabled = name.isNotBlank() && rawValue.isNotBlank(),
-                onClick = { onSave(initial.copy(name = name, rawValue = rawValue, format = format)) }
+                onClick = {
+                    onSave(
+                        initial.copy(
+                            name = name,
+                            rawValue = rawValue,
+                            format = format,
+                            location = location.trim()
+                        )
+                    )
+                }
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -186,6 +197,14 @@ private fun BarcodeEditorDialog(
                     value = rawValue,
                     onValueChange = { rawValue = it },
                     label = { Text("Value") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text("Location (optional, e.g. \"Kitchen\")") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
