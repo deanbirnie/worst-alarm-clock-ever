@@ -1,123 +1,180 @@
 # Worst Alarm Clock Ever
 
-An Android alarm clock that won't let you go back to sleep. You configure a
-routine of locations around your home (bathroom, kitchen, desk, …). At wake
-time the alarm rings and the only way to silence it is to physically walk to
-each location and scan its barcode. After scanning, a configurable delay runs
-down before the next location's alarm fires. Strict order. No snooze.
+An Android alarm clock you **cannot turn off from bed**. The only way to silence
+it is to physically walk to a barcode (or QR code) you registered earlier —
+the toothpaste in the bathroom, the coffee tin in the kitchen, the QR code taped
+to your monitor — and scan it with the phone's camera. No snooze button. No
+"stop" button. The alarm keeps ringing until you get up and scan.
 
-An **emergency stop** mini-game is provided for the "I'm on fire" case: tap
-the lit square on a 4×4 grid 500 times. Any 30-second idle resets the counter
-and resumes the alarm.
+## How it works
+
+1. **Register barcodes.** In the app's barcode library, scan (or type) any
+   barcode or QR code and give it a name — "Bathroom toothpaste", "Kitchen
+   coffee", "Desk QR". Any scannable code works: product barcodes, printed QR
+   codes, book ISBNs.
+2. **Create an alarm.** Pick a time, pick the days of the week it repeats
+   (or none for a one-time alarm), and attach one or more *locations*, each
+   pointing at a saved barcode.
+3. **Wake up the hard way.** At alarm time the phone rings at full alarm
+   volume with vibration, over the lock screen. The screen shows which barcode
+   to scan. Scanning the right code stops the ringing; scanning anything else
+   flashes "wrong barcode" and keeps ringing.
+
+### Alarm paths (the advanced mode)
+
+An alarm isn't limited to a single barcode — it's an ordered **routine**:
+
+> Ring → scan **Bathroom** → 5 quiet minutes (brush teeth) → ring again →
+> scan **Kitchen** → 5 quiet minutes (make coffee) → ring again →
+> scan **Desk** → alarm fully disarmed. You're up, caffeinated, and at your desk.
+
+Each step has its own configurable pause before the next ring. A single-step
+alarm is just a path of length one. The pause countdown is shown on screen and
+in the persistent notification.
 
 ## Features
 
-- **Barcode library** — save any barcode (scan or type) with a name; reuse
-  across alarms and locations.
-- **Multi-step routines** — order and per-step delays fully configurable.
-- **Recurring alarms** — pick any subset of weekdays, or leave all unchecked
-  for a one-shot alarm.
-- **Lock-screen takeover** — alarm activity shows over the keyguard, turns on
-  the screen, blocks back/home/menu keys, and re-asserts itself via an overlay
-  if you manage to navigate away.
-- **ML Kit barcode scanning** — QR, EAN-13, UPC-A, Code 128, PDF417, Data
-  Matrix, etc. Works offline (bundled model).
-- **Survives reboot** — enabled alarms are rescheduled on boot.
-- **Uses `AlarmManager.setAlarmClock`** — bypasses Doze without needing the
-  `SCHEDULE_EXACT_ALARM` allowlist on Android 12+.
+- **Barcode library** — save any barcode/QR (scan with the camera or type the
+  value manually); reuse the same code across multiple alarms and steps.
+  Codes in use by an alarm are protected from deletion.
+- **Multi-step routines ("alarm paths")** — ordered locations with per-step
+  quiet periods between rings.
+- **Recurring or one-shot alarms** — pick any subset of weekdays; with no days
+  selected the alarm fires once and disables itself.
+- **Full lock-screen takeover** — the alarm UI appears over the keyguard,
+  turns the screen on, and ignores the back button.
+- **Re-assert overlay** — if you escape to the home screen while the alarm is
+  active, a full-screen overlay blocks the phone until you return to the alarm
+  (requires the "Display over other apps" permission).
+- **Maximum volume** — alarm plays on the alarm audio stream at max volume
+  with a vibration pattern, regardless of your media/ring volume.
+- **Survives reboots** — enabled alarms are rescheduled after boot and app
+  updates.
+- **Doze-proof scheduling** — uses `AlarmManager.setAlarmClock`, the
+  strongest alarm the OS offers; it fires exactly on time without needing
+  battery-optimization exemptions.
+- **Offline barcode scanning** — Google ML Kit with the bundled model:
+  QR, EAN-13/8, UPC-A/E, Code 128/39/93, Codabar, ITF, PDF417, Aztec,
+  Data Matrix. No internet needed, ever.
+- **Emergency escape hatch** — for genuine emergencies there is exactly one
+  way out without scanning: a mini-game that requires tapping the lit square
+  on a 4×4 grid **500 times**. Going idle for 30 seconds aborts the attempt
+  and the alarm resumes. Annoying enough that going to the kitchen is easier.
 
-## Building the APK
+## Documentation map
 
-### Requirements
+| File | What's in it |
+|---|---|
+| [BUILDING.md](BUILDING.md) | Every way to produce and install the APK: download from CI, Android Studio, command line. |
+| [RELEASING.md](RELEASING.md) | Signing, versioning, long-term maintenance, and the full Google Play publishing path. |
+| [TODO.md](TODO.md) | Project task list — what's done and what's next. |
 
-- Android Studio Hedgehog (2023.1) or newer, **or** a standalone Gradle 8.7+
-  install with the Android command-line tools and SDK (platform 34).
-- JDK 17.
+## The user interface
 
-### From Android Studio (easiest)
+Three screens, kept deliberately simple:
 
-1. `File → Open…` → select the repo root.
-2. Let Gradle sync (first run will download dependencies + the Gradle
-   wrapper). Accept any SDK license prompts.
-3. `Build → Build Bundle(s) / APK(s) → Build APK(s)`.
-4. The debug APK lands at
-   `app/build/outputs/apk/debug/app-debug.apk`.
-5. Plug in an Android device with USB debugging enabled and either
-   `Run ▶` it, or `adb install app/build/outputs/apk/debug/app-debug.apk`.
+- **Alarm list (home).** Every alarm with its time, days, step count, and an
+  on/off switch. A banner prompts for the overlay permission until granted.
+  `+` creates an alarm; the QR icon in the top bar opens the barcode library.
+- **Barcode library.** Your saved codes with name, value, and format.
+  Add/edit via a dialog that lets you scan with the camera or type a value.
+- **Alarm editor.** Label, time picker, weekday chips, and the ordered list
+  of routine steps — each step names a location, picks a barcode from the
+  library, and (except the last) sets the quiet delay before the next ring.
 
-### From the command line
+Plus the **ringing screen** you'll meet every morning: which location to scan,
+step progress, a giant SCAN BARCODE button that opens the camera, and the
+countdown between steps.
 
-The Gradle wrapper JAR is not checked in. Run this once after cloning:
+## Architecture
 
-```sh
-gradle wrapper --gradle-version 8.7
+Native Android, single module, 100% Kotlin.
+
+| Layer | Tech |
+|---|---|
+| UI | Jetpack Compose + Material 3, Navigation Compose |
+| State | `ViewModel` + Kotlin `StateFlow` |
+| Persistence | Room (SQLite) |
+| Scanning | CameraX + ML Kit barcode scanning (bundled model) |
+| Scheduling | `AlarmManager.setAlarmClock` + `BroadcastReceiver` |
+| Ringing | Foreground `Service` + `MediaPlayer` on the alarm stream |
+
+### Data model (Room)
+
+```
+AlarmEntity        id, label, hour, minute, daysMask (bit0=Mon … bit6=Sun; 0 = one-shot), enabled
+BarcodeEntity      id, name, rawValue, format (ML Kit format int)
+RoutineStepEntity  id, alarmId → AlarmEntity, stepIndex, locationLabel,
+                   barcodeId → BarcodeEntity, timeToNextRingSeconds
 ```
 
-(Requires a system `gradle` on PATH — Android Studio, Homebrew's `gradle`,
-or a manual install will all do.)
+Steps cascade-delete with their alarm; barcodes referenced by any step are
+protected (`RESTRICT`) and the UI refuses to delete them.
 
-Then:
+### The alarm lifecycle
 
-```sh
-./gradlew assembleDebug            # debug APK
-./gradlew assembleRelease          # unsigned release APK
-./gradlew installDebug             # build + install on connected device
+```
+AlarmScheduler.schedule()            computes next trigger, arms AlarmManager.setAlarmClock
+        │  (alarm time)
+        ▼
+AlarmReceiver (broadcast)            starts AlarmService (foreground) + launches AlarmActivity
+        │
+        ▼
+AlarmService                         owns the state machine (AlarmSession StateFlow):
+   ring step N  ──────────────►      audio (max alarm volume, looping) + vibration
+   user scans correct barcode ─►     stop audio; if last step → disarm;
+                                     else wait timeToNextRingSeconds → ring step N+1
+   disarm ────────────────────►      reschedule (recurring) or disable (one-shot), stop service
+        │
+        ▼
+AlarmActivity (Compose)              lock-screen UI: ringing panel ⇄ camera scanner ⇄ emergency game
+OverlayService                       full-screen overlay if the user escapes to home mid-alarm
+BootReceiver                         re-arms all enabled alarms after reboot / app update
 ```
 
-## First-run setup
+Source lives under `app/src/main/java/com/worstalarm/clock/`:
+`data/` (Room entities, DAOs, repository), `alarm/` (scheduler, receivers,
+services, ringing activity), `ui/` (Compose screens, view model, scanner,
+theme).
 
-On first launch the app will ask for a few permissions. Grant all of them or
-the alarm can't do its job:
+## Permissions
 
-1. **Notifications** (Android 13+) — required for the foreground alarm service.
-2. **Camera** — required for barcode scanning.
-3. **Display over other apps** — used by the re-assert overlay. The home
-   screen shows a banner with a one-tap button to open the right settings page.
-4. **Ignore battery optimizations** — not strictly required because we use
-   `setAlarmClock`, but recommended on aggressive OEMs (Xiaomi, Samsung,
-   Oppo, …).
+| Permission | Why | When asked |
+|---|---|---|
+| Camera | Scanning barcodes | First launch (and again at scan time if denied) |
+| Notifications (Android 13+) | The foreground service's persistent notification + full-screen alarm intent | First launch |
+| Display over other apps | The re-assert overlay that blocks escaping the alarm | Banner on the home screen (optional but recommended) |
+| Exact alarms / boot / vibrate / wake lock | Core alarm behavior | Install time (no prompt; `setAlarmClock` needs no special exemption) |
 
-## Usage
+## Honest limitations
 
-1. Open the **Barcode library** (QR icon in the top bar). Add one entry per
-   barcode you plan to leave around the house. Scan or type the value and
-   give it a name (e.g. "Bathroom QR").
-2. Tap **+** on the home screen to create an alarm.
-3. Set time, pick days, add locations in order. Each location needs a label
-   and a reference to a saved barcode. For every step except the last, set
-   the delay between "user scanned this step" and "next ring fires".
-4. Save. Toggle the alarm on.
-5. Print/place your barcodes. (Any barcode works — product codes on
-   cereal boxes are fine. You can even reuse the same barcode at multiple
-   locations, in which case the alarm just advances through steps as you
-   scan it repeatedly.)
+- **A determined user can still cheat.** Force-stop or uninstall via Settings,
+  reboot into safe mode, or power the phone off. True kiosk-grade lockdown
+  requires device-owner provisioning, which is out of scope for a consumer
+  app (and would make Play Store review much harder). The overlay +
+  lock-screen takeover makes cheating *inconvenient*, which is the point:
+  at 6 AM, walking to the kitchen is easier than fighting the phone.
+- **Don't force-stop the app.** A force-stopped app's alarms won't fire until
+  it's opened again. Normal swipes from recents are fine.
+- **OEM battery killers.** Aggressive vendors (Xiaomi, Oppo, some Samsung
+  modes) can delay even `setAlarmClock`. If alarms are late, exempt the app
+  from battery optimization in system settings.
+- **iOS is not possible** in this form — iOS does not let third-party apps
+  take over the lock screen or play unstoppable audio from the background.
 
-## Architecture notes
+## Quick start for developers
 
-- `com.worstalarm.clock.alarm.AlarmScheduler` — schedules the next firing
-  time per alarm via `AlarmManager.setAlarmClock`.
-- `AlarmReceiver` (BroadcastReceiver) — receives the system broadcast, starts
-  `AlarmService` as a foreground service and launches `AlarmActivity`.
-- `AlarmService` — owns the ringing state machine, plays the system alarm
-  sound on `STREAM_ALARM`, drives the between-step countdown with a `Handler`,
-  and reschedules or disables the alarm once disarmed.
-- `AlarmSession` — a `StateFlow<State?>` singleton shared between the service
-  and the activity.
-- `AlarmActivity` — Compose UI: `RingingPanel` → `ScanningPanel` (CameraX +
-  ML Kit) → `EmergencyScreen` (500-tap game).
-- `OverlayService` — full-screen `TYPE_APPLICATION_OVERLAY` shown if the user
-  backgrounds the alarm activity; tapping "CONTINUE" brings it back.
-- `BootReceiver` — reschedules enabled alarms after reboot / app upgrade.
+```sh
+git clone <this repo>
+cd worst-alarm-clock-ever
+./gradlew assembleDebug          # needs JDK 17 + Android SDK (see BUILDING.md)
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
 
-## Known limits
+No Android SDK on your machine? Push to GitHub and download the APK from the
+**Actions** tab instead — see [BUILDING.md](BUILDING.md).
 
-- **No true kiosk mode.** A determined user can still reach the notification
-  shade and long-press to go to settings, or boot into safe mode. Real
-  "can't uninstall" behavior requires provisioning the app as Device Owner
-  via ADB on a factory-reset device. That's a future option; the current
-  build is the aggressive-overlay variant you picked during setup.
-- **iOS port not started.** Stack is native Kotlin/Jetpack Compose; an iOS
-  port would be a rewrite (SwiftUI + AVFoundation's `AVCaptureMetadataOutput`
-  for barcodes + a UserNotifications time-interval trigger, with the
-  important caveat that iOS does not let third-party apps block the home
-  gesture).
+## License
+
+No license file yet — all rights reserved by default. Pick a license before
+publishing the source (see TODO.md).
