@@ -13,6 +13,12 @@ object AlarmScheduler {
 
     private const val EXTRA_ALARM_ID = "alarm_id"
 
+    /** Fired when an alarm's scheduled time arrives (step 0 of the routine). */
+    const val ACTION_FIRE = "com.worstalarm.clock.ALARM_FIRE"
+
+    /** Fired when the quiet pause between routine steps ends and the next step must ring. */
+    const val ACTION_STEP_RING = "com.worstalarm.clock.STEP_RING"
+
     fun alarmIdFromIntent(intent: Intent?): Long? =
         intent?.takeIf { it.hasExtra(EXTRA_ALARM_ID) }?.getLongExtra(EXTRA_ALARM_ID, -1L)
             ?.takeIf { it > 0 }
@@ -39,16 +45,51 @@ object AlarmScheduler {
         pendingIntentFor(context, alarmId, create = false)?.let { am.cancel(it) }
     }
 
+    /**
+     * Arms the ring for the NEXT routine step at [triggerAtMs]. Uses setAlarmClock —
+     * not Handler.postDelayed — because a Handler's uptime clock pauses in deep sleep:
+     * with the screen off, the ring would silently wait until the user woke the phone.
+     * setAlarmClock wakes the device from any sleep/Doze state, exactly on time.
+     */
+    fun scheduleStepRing(context: Context, alarmId: Long, triggerAtMs: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val pi = stepPendingIntent(context, alarmId, create = true) ?: return
+        val showIntent = PendingIntent.getActivity(
+            context,
+            alarmId.toInt(),
+            Intent(context, MainActivity::class.java),
+            pendingIntentFlags()
+        )
+        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMs, showIntent), pi)
+    }
+
+    fun cancelStepRing(context: Context, alarmId: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        stepPendingIntent(context, alarmId, create = false)?.let { am.cancel(it) }
+    }
+
     fun rescheduleAll(context: Context, alarms: List<AlarmEntity>) {
         alarms.forEach { if (it.enabled) schedule(context, it) else cancel(context, it.id) }
     }
 
     private fun pendingIntentFor(context: Context, alarmId: Long, create: Boolean): PendingIntent? {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
-            action = "com.worstalarm.clock.ALARM_FIRE"
+            action = ACTION_FIRE
             putExtra(EXTRA_ALARM_ID, alarmId)
             // Setting data makes each alarm's PendingIntent unique even if extras alone wouldn't.
             data = android.net.Uri.parse("worstalarm://alarm/$alarmId")
+        }
+        val flags = pendingIntentFlags() or (if (!create) PendingIntent.FLAG_NO_CREATE else 0)
+        return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
+    }
+
+    // Distinct action + data URI keep this PendingIntent separate from the alarm's own
+    // schedule, so arming a step ring never clobbers the recurring alarm (or vice versa).
+    private fun stepPendingIntent(context: Context, alarmId: Long, create: Boolean): PendingIntent? {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_STEP_RING
+            putExtra(EXTRA_ALARM_ID, alarmId)
+            data = android.net.Uri.parse("worstalarm://alarm/$alarmId/step")
         }
         val flags = pendingIntentFlags() or (if (!create) PendingIntent.FLAG_NO_CREATE else 0)
         return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
