@@ -14,7 +14,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import com.worstalarm.clock.ui.ringing.AlarmRingingRoot
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -52,9 +51,10 @@ class AlarmActivity : ComponentActivity() {
             AlarmRingingRoot(state = state)
         }
 
-        // Auto-finish this activity when the session ends.
+        // Auto-finish this activity when the session ends. (StateFlow already skips
+        // equal values, so no distinctUntilChanged needed — it's a compile error on it.)
         lifecycleScope.launch {
-            AlarmSession.state.distinctUntilChanged().collect { s ->
+            AlarmSession.state.collect { s ->
                 if (s == null && !isFinishing) finish()
             }
         }
