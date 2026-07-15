@@ -13,7 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -105,7 +105,7 @@ fun AlarmEditScreen(
                 title = { Text(if (alarmId == 0L) "New alarm" else "Edit alarm") },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -204,17 +204,14 @@ fun AlarmEditScreen(
             }
 
             OutlinedButton(
+                enabled = barcodes.isNotEmpty(),
                 onClick = {
-                    if (barcodes.isEmpty()) {
-                        // Can't add a step without any barcodes in the library — nudge user.
-                    } else {
-                        steps = steps + UiStep(
-                            locationLabel = "Location ${steps.size + 1}",
-                            barcodeId = 0L,
-                            barcodeName = "",
-                            timeToNextSeconds = 180
-                        )
-                    }
+                    steps = steps + UiStep(
+                        locationLabel = "Location ${steps.size + 1}",
+                        barcodeId = 0L,
+                        barcodeName = "",
+                        timeToNextSeconds = 180
+                    )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

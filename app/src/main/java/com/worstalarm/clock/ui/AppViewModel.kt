@@ -28,16 +28,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         repo.getAlarm(id)
     }
 
+    // Room suspend DAOs are main-safe (they hop to Room's own executor), so these launch on
+    // the default main dispatcher and callbacks fire on the main thread — callers navigate
+    // and show toasts from them.
     fun saveBarcode(barcode: BarcodeEntity, onSaved: (Long) -> Unit = {}) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = repo.saveBarcode(barcode)
+        viewModelScope.launch {
+            val id = withContext(Dispatchers.IO) { repo.saveBarcode(barcode) }
             onSaved(id)
         }
     }
 
     fun deleteBarcode(barcode: BarcodeEntity, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            onResult(repo.deleteBarcode(barcode))
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { repo.deleteBarcode(barcode) }
+            onResult(ok)
         }
     }
 
@@ -46,9 +50,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         steps: List<RoutineStepEntity>,
         onSaved: () -> Unit = {}
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = repo.saveAlarm(alarm, steps)
-            val saved = repo.getAlarm(id)?.alarm ?: alarm.copy(id = id)
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                val id = repo.saveAlarm(alarm, steps)
+                repo.getAlarm(id)?.alarm ?: alarm.copy(id = id)
+            }
             if (saved.enabled) AlarmScheduler.schedule(appContext, saved)
             else AlarmScheduler.cancel(appContext, saved.id)
             onSaved()
@@ -56,17 +62,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setEnabled(alarm: AlarmEntity, enabled: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repo.setEnabled(alarm.id, enabled)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { repo.setEnabled(alarm.id, enabled) }
             if (enabled) AlarmScheduler.schedule(appContext, alarm.copy(enabled = true))
             else AlarmScheduler.cancel(appContext, alarm.id)
         }
     }
 
     fun deleteAlarm(alarm: AlarmEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             AlarmScheduler.cancel(appContext, alarm.id)
-            repo.deleteAlarm(alarm.id)
+            withContext(Dispatchers.IO) { repo.deleteAlarm(alarm.id) }
         }
     }
 }

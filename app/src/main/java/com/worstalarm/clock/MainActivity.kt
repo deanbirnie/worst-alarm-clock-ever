@@ -17,9 +17,9 @@ import com.worstalarm.clock.ui.theme.WorstAlarmTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val requestPost = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* ignored — the app still functions without it */ }
+    private val requestPermissions = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* ignored — the alarm degrades gracefully; camera is re-requested at scan time */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,15 +36,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Ask for camera + notifications up front. Camera in particular must be granted BEFORE
+    // an alarm rings: the runtime permission dialog can't be shown safely over the ringing
+    // lock-screen activity.
     private fun maybeAskForRuntimePermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(
-                    this, android.Manifest.permission.POST_NOTIFICATIONS
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                requestPost.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        val wanted = buildList {
+            add(android.Manifest.permission.CAMERA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(android.Manifest.permission.POST_NOTIFICATIONS)
             }
+        }.filter {
+            ActivityCompat.checkSelfPermission(this, it) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
         }
+        if (wanted.isNotEmpty()) requestPermissions.launch(wanted.toTypedArray())
     }
 
     private fun openOverlaySettings() {

@@ -85,14 +85,13 @@ class AlarmActivity : ComponentActivity() {
         }
     }
 
+    // Only re-assert via the overlay when the user deliberately navigates away (home /
+    // recents / notification tap). Plain onPause also fires for system dialogs — e.g. the
+    // runtime camera-permission prompt — and starting the overlay then would cover the
+    // dialog and lock the user out of granting the permission.
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (AlarmSession.isActive) startOverlayIfAllowed()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        if (AlarmSession.isActive && !isFinishing) startOverlayIfAllowed()
     }
 
     override fun onResume() {

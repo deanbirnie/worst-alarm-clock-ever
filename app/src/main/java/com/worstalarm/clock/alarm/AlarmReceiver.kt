@@ -3,7 +3,6 @@ package com.worstalarm.clock.alarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.content.ContextCompat
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -24,13 +23,13 @@ class AlarmReceiver : BroadcastReceiver() {
             )
             putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
         }
-        // On Android 10+ background activity starts are restricted, but since we're running
-        // from a user-facing alarm (AlarmManager.setAlarmClock) this path is allowed.
-        context.startActivity(activityIntent)
-
-        @Suppress("DEPRECATION")
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            // (Kept for clarity; minSdk=26 means this is never taken.)
+        // Direct launch works when allowed (user-facing alarm via setAlarmClock, or the
+        // overlay permission is granted). If the OS blocks it, the full-screen intent on
+        // the service's notification is the fallback path that surfaces the alarm UI.
+        try {
+            context.startActivity(activityIntent)
+        } catch (_: Throwable) {
+            // Full-screen intent fallback handles it.
         }
     }
 }

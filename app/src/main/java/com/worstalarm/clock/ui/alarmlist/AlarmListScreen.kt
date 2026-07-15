@@ -28,13 +28,19 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.worstalarm.clock.data.dao.AlarmWithSteps
@@ -51,8 +57,19 @@ fun AlarmListScreen(
 ) {
     val context = LocalContext.current
     val alarms by vm.alarms().collectAsStateWithLifecycle(initialValue = emptyList())
-    // Re-evaluated on every recomposition so the banner disappears once the user grants it.
-    val canDrawOverlays = Settings.canDrawOverlays(context)
+    // Re-checked on every ON_RESUME so the banner disappears when the user returns from
+    // the "Display over other apps" settings page after granting.
+    var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canDrawOverlays = Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
