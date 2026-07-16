@@ -64,6 +64,7 @@ class AlarmService : Service() {
             ACTION_SCAN_SUCCESS -> handleScanSuccess()
             ACTION_ENTER_EMERGENCY -> handleEnterEmergency()
             ACTION_EXIT_EMERGENCY -> handleExitEmergency()
+            ACTION_EMERGENCY_IDLE_RESET -> handleEmergencyIdleReset()
             ACTION_EMERGENCY_COMPLETE, ACTION_DISARM -> disarmAndStop()
         }
         return START_STICKY
@@ -146,17 +147,34 @@ class AlarmService : Service() {
     }
 
     private fun handleEnterEmergency() {
-        AlarmSession.state.value?.let {
-            AlarmScheduler.cancelStepRing(this, it.alarmWithSteps.alarm.id)
+        val s = AlarmSession.state.value ?: return
+        AlarmScheduler.cancelStepRing(this, s.alarmWithSteps.alarm.id)
+        // Idle out of the game too many times and it stops buying silence: the alarm
+        // keeps ringing while the user taps.
+        if (s.emergencyIdleResets >= AlarmSession.MAX_FREE_IDLE_RESETS) {
+            startAudioAndVibration()
+            updateNotification("Emergency mode", "Too many idle resets — alarm stays on")
+        } else {
+            stopAudioAndVibration()
+            updateNotification("Emergency mode", "Complete the taps to disarm")
         }
-        stopAudioAndVibration()
         AlarmSession.update { it.copy(inEmergencyMode = true, isRingingNow = false) }
-        updateNotification("Emergency mode", "Complete the taps to disarm")
     }
 
-    /** Called if the 30s idle timer in the mini-game expires. */
+    /** The user backed out of the mini-game voluntarily — resume ringing, no penalty. */
     private fun handleExitEmergency() {
         AlarmSession.update { it.copy(inEmergencyMode = false) }
+        ringCurrentStep()
+    }
+
+    /** The 30 s idle timer in the mini-game expired — resume ringing and count it. */
+    private fun handleEmergencyIdleReset() {
+        AlarmSession.update {
+            it.copy(
+                inEmergencyMode = false,
+                emergencyIdleResets = it.emergencyIdleResets + 1
+            )
+        }
         ringCurrentStep()
     }
 
@@ -310,6 +328,7 @@ class AlarmService : Service() {
         const val ACTION_SCAN_SUCCESS = "com.worstalarm.SCAN_SUCCESS"
         const val ACTION_ENTER_EMERGENCY = "com.worstalarm.ENTER_EMERGENCY"
         const val ACTION_EXIT_EMERGENCY = "com.worstalarm.EXIT_EMERGENCY"
+        const val ACTION_EMERGENCY_IDLE_RESET = "com.worstalarm.EMERGENCY_IDLE_RESET"
         const val ACTION_EMERGENCY_COMPLETE = "com.worstalarm.EMERGENCY_COMPLETE"
         const val ACTION_DISARM = "com.worstalarm.DISARM"
         const val EXTRA_ALARM_ID = "alarm_id"

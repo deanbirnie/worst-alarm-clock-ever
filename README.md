@@ -69,7 +69,9 @@ in the persistent notification.
 - **Emergency escape hatch** — for genuine emergencies there is exactly one
   way out without scanning: a mini-game that requires tapping the lit square
   on a 4×4 grid **500 times**. Going idle for 30 seconds aborts the attempt
-  and the alarm resumes. Annoying enough that going to the kitchen is easier.
+  and the alarm resumes — and after three idle resets the game stops buying
+  silence: the alarm keeps ringing while you tap. Annoying enough that going
+  to the kitchen is easier.
 
 ## Documentation map
 

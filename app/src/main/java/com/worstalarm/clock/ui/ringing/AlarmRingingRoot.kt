@@ -114,6 +114,9 @@ fun AlarmRingingRoot(state: AlarmSession.State?) {
                     }
                 }
                 Panel.Emergency -> EmergencyScreen(
+                    idleResets = state.emergencyIdleResets,
+                    maxFreeIdleResets = AlarmSession.MAX_FREE_IDLE_RESETS,
+                    alarmStaysOn = state.emergencyIdleResets >= AlarmSession.MAX_FREE_IDLE_RESETS,
                     onCancel = {
                         context.startService(
                             Intent(context, AlarmService::class.java)
@@ -128,10 +131,11 @@ fun AlarmRingingRoot(state: AlarmSession.State?) {
                         )
                     },
                     onIdleTimeout = {
-                        // Idle too long — resume the alarm ring and reset the tap counter.
+                        // Idle too long — resume the alarm ring, reset the tap counter,
+                        // and burn one of the free idle resets.
                         context.startService(
                             Intent(context, AlarmService::class.java)
-                                .setAction(AlarmService.ACTION_EXIT_EMERGENCY)
+                                .setAction(AlarmService.ACTION_EMERGENCY_IDLE_RESET)
                         )
                         Toast.makeText(
                             context, "Idle too long — alarm resumed.", Toast.LENGTH_SHORT

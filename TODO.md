@@ -57,6 +57,9 @@ things only when they're verified working.
 - [x] Fix (0.2.2): step-delay Min/Sec inputs now have -/+ stepper buttons, and tapping
       into the field selects its whole value so typing replaces it outright instead of
       leaving a stray leading "0"
+- [x] Emergency game escalation (0.2.3): after 3 idle-timeout resets, entering the game
+      no longer silences the alarm — it keeps ringing until the 500 taps are done
+      (voluntary "back to alarm" exits don't count; the counter resets per alarm session)
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)

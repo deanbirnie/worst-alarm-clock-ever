@@ -42,10 +42,14 @@ private const val GRID = 4
 /**
  * Emergency disarm mini-game: a 4x4 grid where exactly one square lights up at a time;
  * the user must tap the lit square 500 times. Any 30-second idle window resets the
- * counter and resumes the alarm.
+ * counter and resumes the alarm. After [maxFreeIdleResets] idle resets the game stops
+ * silencing the alarm — it keeps ringing while the user taps ([alarmStaysOn]).
  */
 @Composable
 fun EmergencyScreen(
+    idleResets: Int,
+    maxFreeIdleResets: Int,
+    alarmStaysOn: Boolean,
     onCancel: () -> Unit,
     onComplete: () -> Unit,
     onIdleTimeout: () -> Unit
@@ -85,6 +89,19 @@ fun EmergencyScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
         )
+        if (alarmStaysOn) {
+            Text(
+                "You've idled out $idleResets times — the alarm keeps ringing until you finish.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        } else if (idleResets > 0) {
+            Text(
+                "Idle resets: $idleResets of $maxFreeIdleResets. After $maxFreeIdleResets, the alarm keeps ringing during the game.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+        }
 
         Text(
             "$taps / $TARGET_TAPS",
