@@ -180,7 +180,7 @@ theme).
 git clone <this repo>
 cd worst-alarm-clock-ever
 ./gradlew assembleDebug          # needs JDK 17 + Android SDK (see BUILDING.md)
-adb install app/build/outputs/apk/debug/app-debug.apk
+adb install app/build/outputs/apk/debug/WorstAlarmEver-<version>-debug.apk
 ```
 
 No Android SDK on your machine? Push to GitHub and download the APK from the

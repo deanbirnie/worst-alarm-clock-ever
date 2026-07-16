@@ -12,8 +12,8 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.2.4"
+        versionCode = 7
+        versionName = "0.2.5"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -52,6 +52,19 @@ android {
             "META-INF/LGPL2.1",
             "META-INF/*.kotlin_module"
         )
+    }
+}
+
+// Name APK files "WorstAlarmEver-<version>-<buildType>.apk" instead of the default
+// app-debug.apk / app-release.apk. Uses the stable public Variant API (not the old
+// internal BaseVariantOutputImpl cast) so it doesn't rely on AGP internals.
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set(
+                "WorstAlarmEver-${android.defaultConfig.versionName}-${variant.buildType}.apk"
+            )
+        }
     }
 }
 
