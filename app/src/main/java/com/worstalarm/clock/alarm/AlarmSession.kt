@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object AlarmSession {
 
+    /** Idle resets of the emergency game allowed before it stops silencing the alarm. */
+    const val MAX_FREE_IDLE_RESETS = 3
+
     data class State(
         val alarmWithSteps: AlarmWithSteps,
         /** Index into orderedSteps of the step the user is currently trying to scan. */
@@ -25,7 +28,13 @@ object AlarmSession {
         /** True while the user is in the 500-tap emergency mini-game (audio muted, no re-ring). */
         val inEmergencyMode: Boolean,
         /** Total number of times the user has successfully scanned a step (for the mini-game reset logic). */
-        val scansCompleted: Int
+        val scansCompleted: Int,
+        /**
+         * Times the emergency mini-game was reset by its 30 s idle timeout this session.
+         * At [MAX_FREE_IDLE_RESETS] the game stops muting the alarm: it keeps ringing
+         * while the user taps.
+         */
+        val emergencyIdleResets: Int
     ) {
         val currentStep get() = alarmWithSteps.orderedSteps[currentStepIndex]
         val totalSteps get() = alarmWithSteps.orderedSteps.size
@@ -44,7 +53,8 @@ object AlarmSession {
             isRingingNow = true,
             nextRingAtMs = 0L,
             inEmergencyMode = false,
-            scansCompleted = 0
+            scansCompleted = 0,
+            emergencyIdleResets = 0
         )
     }
 

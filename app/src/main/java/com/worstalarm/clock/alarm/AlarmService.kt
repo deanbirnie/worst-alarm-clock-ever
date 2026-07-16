@@ -61,9 +61,10 @@ class AlarmService : Service() {
         when (intent?.action) {
             ACTION_RING -> handleRing(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
             ACTION_STEP_RING -> handleStepRing(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
-            ACTION_SCAN_SUCCESS -> handleScanSuccess()
+            ACTION_SCAN_SUCCESS -> handleScanSuccess(intent)
             ACTION_ENTER_EMERGENCY -> handleEnterEmergency()
             ACTION_EXIT_EMERGENCY -> handleExitEmergency()
+            ACTION_EMERGENCY_IDLE_RESET -> handleEmergencyIdleReset()
             ACTION_EMERGENCY_COMPLETE, ACTION_DISARM -> disarmAndStop()
         }
         return START_STICKY
@@ -104,11 +105,27 @@ class AlarmService : Service() {
         )
     }
 
-    private fun handleScanSuccess() {
+    private fun handleScanSuccess(intent: Intent) {
         val s = AlarmSession.state.value ?: return
+
+        // Re-validate against the current step. The camera fires one event per frame the
+        // barcode is visible in, so a single physical scan can emit several intents —
+        // unchecked, each one advanced a step and silently skipped parts of the routine
+        // (the reused-barcode bug). See ScanValidator.
+        val decision = ScanValidator.decide(
+            currentStepIndex = s.currentStepIndex,
+            totalSteps = s.totalSteps,
+            expectedRawValue = s.currentStep.barcode.rawValue,
+            expectedFormat = s.currentStep.barcode.format,
+            scannedStepIndex = intent.getIntExtra(EXTRA_STEP_INDEX, -1),
+            scannedRawValue = intent.getStringExtra(EXTRA_SCANNED_VALUE),
+            scannedFormat = intent.getIntExtra(EXTRA_SCANNED_FORMAT, 0)
+        )
+        if (decision == ScanValidator.Decision.IGNORE) return
+
         stopAudioAndVibration()
 
-        if (s.isLastStep) {
+        if (decision == ScanValidator.Decision.DISARM) {
             disarmAndStop()
             return
         }
@@ -146,17 +163,34 @@ class AlarmService : Service() {
     }
 
     private fun handleEnterEmergency() {
-        AlarmSession.state.value?.let {
-            AlarmScheduler.cancelStepRing(this, it.alarmWithSteps.alarm.id)
+        val s = AlarmSession.state.value ?: return
+        AlarmScheduler.cancelStepRing(this, s.alarmWithSteps.alarm.id)
+        // Idle out of the game too many times and it stops buying silence: the alarm
+        // keeps ringing while the user taps.
+        if (s.emergencyIdleResets >= AlarmSession.MAX_FREE_IDLE_RESETS) {
+            startAudioAndVibration()
+            updateNotification("Emergency mode", "Too many idle resets — alarm stays on")
+        } else {
+            stopAudioAndVibration()
+            updateNotification("Emergency mode", "Complete the taps to disarm")
         }
-        stopAudioAndVibration()
         AlarmSession.update { it.copy(inEmergencyMode = true, isRingingNow = false) }
-        updateNotification("Emergency mode", "Complete the taps to disarm")
     }
 
-    /** Called if the 30s idle timer in the mini-game expires. */
+    /** The user backed out of the mini-game voluntarily — resume ringing, no penalty. */
     private fun handleExitEmergency() {
         AlarmSession.update { it.copy(inEmergencyMode = false) }
+        ringCurrentStep()
+    }
+
+    /** The 30 s idle timer in the mini-game expired — resume ringing and count it. */
+    private fun handleEmergencyIdleReset() {
+        AlarmSession.update {
+            it.copy(
+                inEmergencyMode = false,
+                emergencyIdleResets = it.emergencyIdleResets + 1
+            )
+        }
         ringCurrentStep()
     }
 
@@ -310,9 +344,13 @@ class AlarmService : Service() {
         const val ACTION_SCAN_SUCCESS = "com.worstalarm.SCAN_SUCCESS"
         const val ACTION_ENTER_EMERGENCY = "com.worstalarm.ENTER_EMERGENCY"
         const val ACTION_EXIT_EMERGENCY = "com.worstalarm.EXIT_EMERGENCY"
+        const val ACTION_EMERGENCY_IDLE_RESET = "com.worstalarm.EMERGENCY_IDLE_RESET"
         const val ACTION_EMERGENCY_COMPLETE = "com.worstalarm.EMERGENCY_COMPLETE"
         const val ACTION_DISARM = "com.worstalarm.DISARM"
         const val EXTRA_ALARM_ID = "alarm_id"
+        const val EXTRA_STEP_INDEX = "step_index"
+        const val EXTRA_SCANNED_VALUE = "scanned_value"
+        const val EXTRA_SCANNED_FORMAT = "scanned_format"
         const val NOTIFICATION_ID = 0xA1A2
     }
 }

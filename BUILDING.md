@@ -76,6 +76,7 @@ Notes:
 ### Build
 
 ```sh
+./gradlew testDebugUnitTest    # run the unit tests (CI runs these on every PR)
 ./gradlew assembleDebug        # → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease      # unsigned release APK (needs signing, see RELEASING.md)
 ./gradlew installDebug         # build + install straight onto a USB-connected phone
