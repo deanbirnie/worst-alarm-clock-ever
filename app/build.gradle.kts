@@ -12,8 +12,8 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.2.4"
+        versionCode = 7
+        versionName = "0.2.5"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -52,6 +52,19 @@ android {
             "META-INF/LGPL2.1",
             "META-INF/*.kotlin_module"
         )
+    }
+
+    // Name APK files "WorstAlarmEver-<version>-<buildType>.apk" instead of the
+    // default app-debug.apk / app-release.apk. AGP's newer public Variant API
+    // (VariantOutput) doesn't expose a settable outputFileName without reaching
+    // into an internal impl class, so this uses the older variant API, which
+    // AGP keeps working specifically for cases like this.
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "WorstAlarmEver-${variant.versionName}-${variant.buildType.name}.apk"
+        }
     }
 }
 

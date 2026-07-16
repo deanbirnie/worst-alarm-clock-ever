@@ -69,6 +69,10 @@ things only when they're verified working.
 - [x] CI: run unit tests in the workflow; triggers narrowed to pushes to main +
       pull requests targeting main (kills the duplicate push/PR double-runs while
       keeping pre-merge verification)
+- [x] CI: name the built APK "WorstAlarmEver-\<version\>-\<buildType\>.apk" (was the
+      generic app-debug.apk) via AGP's public Variant API; artifact + docs updated to
+      match. GitHub still wraps the download in a zip — that part isn't configurable —
+      but the file inside is now properly named
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)

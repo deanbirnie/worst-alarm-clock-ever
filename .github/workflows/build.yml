@@ -6,7 +6,9 @@ name: Build APK
 #     get CI through their open PR, without the old duplicate push+PR double-runs).
 # To get an installable APK without any local Android toolchain:
 #   GitHub repo -> Actions tab -> latest "Build APK" run -> Artifacts ->
-#   download "worst-alarm-clock-debug-apk", unzip, sideload app-debug.apk.
+#   download "WorstAlarmEver-<version>-debug", unzip, sideload the .apk inside.
+#   (GitHub always wraps artifact downloads in a zip — that part isn't
+#   configurable — but the .apk file inside is named and versioned properly.)
 on:
   push:
     branches: [main]
@@ -35,12 +37,18 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: worst-alarm-clock-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: WorstAlarmEver-${{ steps.version.outputs.name }}-debug
+          path: app/build/outputs/apk/debug/WorstAlarmEver-*.apk
           if-no-files-found: error

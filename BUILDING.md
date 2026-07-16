@@ -14,10 +14,14 @@ which compiles the app on GitHub's servers and stores the result.
 1. Open the repository on GitHub and click the **Actions** tab.
 2. Click the most recent **Build APK** run (green check = success).
 3. Scroll to the **Artifacts** section at the bottom of the run page.
-4. Download **worst-alarm-clock-debug-apk** and unzip it → `app-debug.apk`.
+4. Download **WorstAlarmEver-\<version\>-debug** and unzip it →
+   `WorstAlarmEver-<version>-debug.apk` (e.g. `WorstAlarmEver-0.2.4-debug.apk`).
 5. Install it on your phone (see [Installing on your phone](#installing-on-your-phone)).
 
 Notes:
+- GitHub always wraps artifact downloads in a zip — that part isn't
+  configurable — but the `.apk` inside is named after the app and its
+  version, not the generic `app-debug.apk`.
 - Artifacts expire after 90 days; just re-run the workflow (Actions → Build
   APK → "Run workflow") to produce a fresh one.
 - This is the *debug* build: fully functional, signed with a debug key, ideal
@@ -40,7 +44,7 @@ Notes:
 
 - **Menu:** `Build → Build App Bundle(s) / APK(s) → Build APK(s)`.
 - When the "APK(s) generated" balloon appears, click *locate* — the file is at
-  `app/build/outputs/apk/debug/app-debug.apk`.
+  `app/build/outputs/apk/debug/WorstAlarmEver-<version>-debug.apk`.
 
 ### Run directly on your phone
 
@@ -77,7 +81,7 @@ Notes:
 
 ```sh
 ./gradlew testDebugUnitTest    # run the unit tests (CI runs these on every PR)
-./gradlew assembleDebug        # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug        # → app/build/outputs/apk/debug/WorstAlarmEver-<version>-debug.apk
 ./gradlew assembleRelease      # unsigned release APK (needs signing, see RELEASING.md)
 ./gradlew installDebug         # build + install straight onto a USB-connected phone
 ```
@@ -90,7 +94,7 @@ variable or a `local.properties` file in the repo root containing
 
 ## Installing on your phone
 
-Any of these once you have `app-debug.apk`:
+Any of these once you have the `.apk` (e.g. `WorstAlarmEver-0.2.4-debug.apk`):
 
 - **Direct download (simplest).** Put the APK somewhere the phone can reach
   (email it to yourself, Google Drive, or download the CI artifact directly
@@ -98,9 +102,9 @@ Any of these once you have `app-debug.apk`:
   from that app (browser/files) → allow → Install.
 - **USB + adb.**
   ```sh
-  adb install app/build/outputs/apk/debug/app-debug.apk
+  adb install app/build/outputs/apk/debug/WorstAlarmEver-<version>-debug.apk
   # after code changes, upgrade in place:
-  adb install -r app/build/outputs/apk/debug/app-debug.apk
+  adb install -r app/build/outputs/apk/debug/WorstAlarmEver-<version>-debug.apk
   ```
 
 "Blocked by Play Protect" prompt? Choose *Install anyway* — it appears for
