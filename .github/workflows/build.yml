@@ -1,12 +1,17 @@
 name: Build APK
 
-# Builds a debug APK on every push / PR and uploads it as a workflow artifact.
+# Runs unit tests and builds a debug APK:
+#   - on every push to main (the artifact for sideloading), and
+#   - on every pull request targeting main (pre-merge verification — feature branches
+#     get CI through their open PR, without the old duplicate push+PR double-runs).
 # To get an installable APK without any local Android toolchain:
 #   GitHub repo -> Actions tab -> latest "Build APK" run -> Artifacts ->
 #   download "worst-alarm-clock-debug-apk", unzip, sideload app-debug.apk.
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -26,6 +31,9 @@ jobs:
       # the build downloads any missing platform/build-tools automatically.
       - name: Set up Gradle (with build cache)
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace

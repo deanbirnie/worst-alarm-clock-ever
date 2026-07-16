@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -37,6 +39,9 @@ fun BarcodeScanner(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // The AndroidView factory runs once and captures its callback forever; route through
+    // rememberUpdatedState so recompositions with a new onDetected actually take effect.
+    val currentOnDetected by rememberUpdatedState(onDetected)
     val executor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
     val scanner = remember {
         BarcodeScanning.getClient(
@@ -53,7 +58,9 @@ fun BarcodeScanner(
                 val previewView = PreviewView(ctx).apply {
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
-                startCamera(ctx, previewView, lifecycleOwner, executor, scanner, onDetected)
+                startCamera(ctx, previewView, lifecycleOwner, executor, scanner) {
+                    currentOnDetected(it)
+                }
                 previewView
             }
         )

@@ -60,6 +60,15 @@ things only when they're verified working.
 - [x] Emergency game escalation (0.2.3): after 3 idle-timeout resets, entering the game
       no longer silences the alarm — it keeps ringing until the 500 taps are done
       (voluntary "back to alarm" exits don't count; the counter resets per alarm session)
+- [x] Fix (0.2.4): reused-barcode step skipping — one physical scan emitted several
+      SCAN_SUCCESS events (ML Kit reports the code once per camera frame), and the
+      service advanced a step per event, so a path like bathroom → kitchen → bathroom →
+      desk jumped from kitchen straight to desk. Scan events now carry their step index
+      and barcode; the service validates both (`ScanValidator`, unit-tested in
+      `app/src/test/`), and the scanner UI fires at most once per step
+- [x] CI: run unit tests in the workflow; triggers narrowed to pushes to main +
+      pull requests targeting main (kills the duplicate push/PR double-runs while
+      keeping pre-merge verification)
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)

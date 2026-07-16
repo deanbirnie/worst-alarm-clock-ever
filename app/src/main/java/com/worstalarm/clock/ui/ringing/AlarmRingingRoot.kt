@@ -241,7 +241,12 @@ private fun ScanningPanel(
 ) {
     val context = LocalContext.current
     val expected = state.currentStep.barcode
+    val stepIndex = state.currentStepIndex
     var wrongFlash by remember { mutableStateOf(false) }
+    // The camera reports the barcode once per frame it's visible in — only the first
+    // match may fire, or one physical scan advances multiple steps. The service
+    // re-validates as well (see ScanValidator); this just stops the intent spam.
+    var scanHandled by remember(stepIndex) { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -249,10 +254,16 @@ private fun ScanningPanel(
                 if (detected.rawValue == expected.rawValue &&
                     (expected.format == 0 /*FORMAT_UNKNOWN*/ || detected.format == expected.format)
                 ) {
-                    context.startService(
-                        Intent(context, AlarmService::class.java)
-                            .setAction(AlarmService.ACTION_SCAN_SUCCESS)
-                    )
+                    if (!scanHandled) {
+                        scanHandled = true
+                        context.startService(
+                            Intent(context, AlarmService::class.java)
+                                .setAction(AlarmService.ACTION_SCAN_SUCCESS)
+                                .putExtra(AlarmService.EXTRA_STEP_INDEX, stepIndex)
+                                .putExtra(AlarmService.EXTRA_SCANNED_VALUE, detected.rawValue)
+                                .putExtra(AlarmService.EXTRA_SCANNED_FORMAT, detected.format)
+                        )
+                    }
                 } else {
                     wrongFlash = true
                 }
