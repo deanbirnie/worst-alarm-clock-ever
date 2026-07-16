@@ -79,6 +79,7 @@ in the persistent notification.
 |---|---|
 | [BUILDING.md](BUILDING.md) | Every way to produce and install the APK: download from CI, Android Studio, command line. |
 | [RELEASING.md](RELEASING.md) | Signing, versioning, long-term maintenance, and the full Google Play publishing path. |
+| [DESIGN.md](DESIGN.md) | Exact colors, typography, spacing, and screen-by-screen layout of the current UI. |
 | [TODO.md](TODO.md) | Project task list — what's done and what's next. |
 
 ## The user interface
