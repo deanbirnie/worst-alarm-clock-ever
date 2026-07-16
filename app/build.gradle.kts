@@ -53,17 +53,17 @@ android {
             "META-INF/*.kotlin_module"
         )
     }
-}
 
-// Name APK files "WorstAlarmEver-<version>-<buildType>.apk" instead of the default
-// app-debug.apk / app-release.apk. Uses the stable public Variant API (not the old
-// internal BaseVariantOutputImpl cast) so it doesn't rely on AGP internals.
-androidComponents {
-    onVariants { variant ->
-        variant.outputs.forEach { output ->
-            output.outputFileName.set(
-                "WorstAlarmEver-${android.defaultConfig.versionName}-${variant.buildType}.apk"
-            )
+    // Name APK files "WorstAlarmEver-<version>-<buildType>.apk" instead of the
+    // default app-debug.apk / app-release.apk. AGP's newer public Variant API
+    // (VariantOutput) doesn't expose a settable outputFileName without reaching
+    // into an internal impl class, so this uses the older variant API, which
+    // AGP keeps working specifically for cases like this.
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "WorstAlarmEver-${variant.versionName}-${variant.buildType.name}.apk"
         }
     }
 }
