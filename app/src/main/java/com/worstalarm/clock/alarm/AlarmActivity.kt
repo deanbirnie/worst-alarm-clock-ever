@@ -23,6 +23,11 @@ import kotlinx.coroutines.launch
  * Lockdown behaviors:
  *   - Shown over the lock screen + turns the screen on.
  *   - Back press is intercepted and ignored.
+ *   - Volume keys are swallowed so the user can't quiet or mute the alarm — only
+ *     disarming it (scan / emergency game) stops the sound. [AlarmService]
+ *     separately forces STREAM_ALARM to max at the start of every ring, so even a
+ *     route around this activity (e.g. a paired Bluetooth remote, Assistant) is
+ *     undone by the next ring.
  *   - Recents / Home can't be blocked from userland, but [OverlayService] re-asserts
  *     the alarm UI if the activity loses focus while [AlarmSession] is still active.
  */
@@ -74,14 +79,29 @@ class AlarmActivity : ComponentActivity() {
     }
 
     // Swallow the hardware menu / search / camera buttons so they can't trigger
-    // anything while the alarm is ringing.
+    // anything while the alarm is ringing, and the volume keys so the alarm can't be
+    // quieted or muted without actually disarming it.
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_SEARCH,
-            KeyEvent.KEYCODE_APP_SWITCH -> true
+            KeyEvent.KEYCODE_APP_SWITCH,
+            KeyEvent.KEYCODE_VOLUME_UP,
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_VOLUME_MUTE -> true
             else -> super.onKeyDown(keyCode, event)
+        }
+    }
+
+    // Volume keys must be consumed on BOTH down and up — some OEM skins still flash
+    // the volume overlay / nudge the stream if only onKeyDown returns true.
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP,
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_VOLUME_MUTE -> true
+            else -> super.onKeyUp(keyCode, event)
         }
     }
 

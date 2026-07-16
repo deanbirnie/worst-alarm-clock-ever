@@ -46,8 +46,9 @@ in the persistent notification.
 - **Re-assert overlay** — if you escape to the home screen while the alarm is
   active, a full-screen overlay blocks the phone until you return to the alarm
   (requires the "Display over other apps" permission).
-- **Maximum volume** — alarm plays on the alarm audio stream at max volume
-  with a vibration pattern, regardless of your media/ring volume.
+- **Maximum volume, locked** — alarm plays on the alarm audio stream at max
+  volume with a vibration pattern; the volume/mute buttons are swallowed
+  while the alarm is active, so it can't be quieted without disarming it.
 - **Survives reboots** — enabled alarms are rescheduled after boot and app
   updates.
 - **Doze-proof scheduling** — uses `AlarmManager.setAlarmClock`, the
@@ -169,6 +170,13 @@ theme).
   at 6 AM, walking to the kitchen is easier than fighting the phone.
 - **Don't force-stop the app.** A force-stopped app's alarms won't fire until
   it's opened again. Normal swipes from recents are fine.
+- **Volume lock has a boundary.** The physical/software volume keys are
+  blocked while the alarm screen has focus, and `AlarmService` re-forces max
+  volume at the start of every ring regardless. But it only guards this
+  activity — if the user escapes to the home screen (gesture nav can't be
+  key-intercepted) and reaches system Settings or a Quick Settings volume
+  slider before the re-assert overlay kicks in, volume can be changed there.
+  Same "inconvenient, not impossible" tradeoff as the rest of the lockdown.
 - **OEM battery killers.** Aggressive vendors (Xiaomi, Oppo, some Samsung
   modes) can delay even `setAlarmClock`. If alarms are late, exempt the app
   from battery optimization in system settings.

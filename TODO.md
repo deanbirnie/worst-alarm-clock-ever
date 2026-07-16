@@ -70,9 +70,19 @@ things only when they're verified working.
       pull requests targeting main (kills the duplicate push/PR double-runs while
       keeping pre-merge verification)
 - [x] CI: name the built APK "WorstAlarmEver-\<version\>-\<buildType\>.apk" (was the
-      generic app-debug.apk) via AGP's public Variant API; artifact + docs updated to
+      generic app-debug.apk) via AGP's `applicationVariants` (old variant API — its
+      newer public `VariantOutput` API doesn't actually expose a settable
+      `outputFileName`, only an internal impl class does); artifact + docs updated to
       match. GitHub still wraps the download in a zip — that part isn't configurable —
       but the file inside is now properly named
+- [x] Add DESIGN.md: full visual spec of colors, typography, spacing, icons, and every
+      screen's layout, for recreating the current UI in an external design tool
+- [x] Fix (0.2.6): volume/mute keys are now swallowed while the alarm activity is
+      showing, so the alarm can't be quieted without disarming it — combined with
+      `AlarmService` forcing STREAM_ALARM to max at the start of every ring. Known
+      boundary: only guards this activity; if the user escapes via a gesture-nav route
+      (not key-interceptable) before the re-assert overlay kicks in, volume can still be
+      changed in system Settings — see README's Honest limitations
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)
