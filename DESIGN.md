@@ -469,6 +469,24 @@ Idle for 30 seconds with no taps → the game silently resets (counter to 0,
 grid dismissed, ringing resumes) — this counts toward the 3-strike limit
 above.
 
+### 9.4 Awake-check popup (a separate, lighter-weight full-screen mode)
+
+Shown by its own activity (`AwakeCheckActivity`), not `AlarmActivity` — it
+appears twice, at random points after the routine's final scan, to confirm
+the user hasn't drifted back to sleep. Visually it's the same warm
+background/typography language as the ringing screens, but it is **not** a
+lockdown: no back-button interception, no re-assert overlay.
+
+Full-height `Column`, `SpaceBetween` arrangement, `systemBarsPadding`, 24dp
+padding, everything centered horizontally:
+- **Top:** "Awake check N of 2" (70%-opacity `onBackground`).
+- **Middle group:** "Still awake?" at **40sp ExtraBold**; 12dp gap;
+  center-aligned body copy at 80%-opacity `onBackground`: "Confirm you're
+  up. If this isn't dismissed in time, the alarm rings again."
+- **Bottom:** a giant primary `Button`, 72dp tall, full-width: "I'M AWAKE"
+  at 22sp Bold — the only control on the screen, and the only action that
+  counts as a response.
+
 ---
 
 ## 10. States and system feedback not tied to a specific screen

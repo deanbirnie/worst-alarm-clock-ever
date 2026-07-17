@@ -2,15 +2,18 @@ package com.worstalarm.clock.data
 
 import com.worstalarm.clock.data.dao.AlarmDao
 import com.worstalarm.clock.data.dao.AlarmWithSteps
+import com.worstalarm.clock.data.dao.AwakeCheckDao
 import com.worstalarm.clock.data.dao.BarcodeDao
 import com.worstalarm.clock.data.entity.AlarmEntity
+import com.worstalarm.clock.data.entity.AwakeCheckEntity
 import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.data.entity.RoutineStepEntity
 import kotlinx.coroutines.flow.Flow
 
 class Repository(
     private val alarmDao: AlarmDao,
-    private val barcodeDao: BarcodeDao
+    private val barcodeDao: BarcodeDao,
+    private val awakeCheckDao: AwakeCheckDao
 ) {
     fun observeAlarms(): Flow<List<AlarmWithSteps>> = alarmDao.observeAllWithSteps()
     fun observeBarcodes(): Flow<List<BarcodeEntity>> = barcodeDao.observeAll()
@@ -40,4 +43,9 @@ class Repository(
 
     suspend fun setEnabled(id: Long, enabled: Boolean) = alarmDao.setEnabled(id, enabled)
     suspend fun deleteAlarm(id: Long) = alarmDao.deleteAlarm(id)
+
+    suspend fun getAwakeCheck(alarmId: Long): AwakeCheckEntity? = awakeCheckDao.get(alarmId)
+    suspend fun getAllAwakeChecks(): List<AwakeCheckEntity> = awakeCheckDao.getAll()
+    suspend fun saveAwakeCheck(entity: AwakeCheckEntity) = awakeCheckDao.upsert(entity)
+    suspend fun clearAwakeCheck(alarmId: Long) = awakeCheckDao.delete(alarmId)
 }
