@@ -73,12 +73,14 @@ in the persistent notification.
   and the alarm resumes — and after three idle resets the game stops buying
   silence: the alarm keeps ringing while you tap. Annoying enough that going
   to the kitchen is easier.
-- **Awake check** — scanning the final barcode drops the lock-screen takeover,
-  but the alarm isn't done: twice, at a random point 5-15 minutes apart, a
-  silent popup lights up the screen and must be tapped "I'm awake" within 90
-  seconds. Miss one and the alarm rings again — rescan just the final
-  location to try the pair again. Only two dismissals in a row actually turns
-  it off, so drifting back to sleep after "disarming" doesn't work.
+- **Awake check** (per-alarm toggle, on by default) — scanning the final
+  barcode drops the lock-screen takeover, but the alarm isn't done: twice, at
+  a random point 5-15 minutes apart, a silent popup lights up the screen and
+  must be tapped "I'm awake" within 90 seconds. Miss one and the alarm rings
+  again — rescan just the final location to try the pair again. Only two
+  dismissals in a row actually turns it off, so drifting back to sleep after
+  "disarming" doesn't work. Turn it off per alarm in the alarm editor if you
+  don't want it (e.g. a short nap).
 
 ## Documentation map
 
@@ -193,12 +195,10 @@ theme).
 - **OEM battery killers.** Aggressive vendors (Xiaomi, Oppo, some Samsung
   modes) can delay even `setAlarmClock`. If alarms are late, exempt the app
   from battery optimization in system settings.
-- **Awake check is always on, per alarm — there's no per-alarm toggle (yet).**
-  Every alarm gets the two post-routine checks; if that turns out to be
-  unwanted for some alarms (e.g. very short naps), it's a natural follow-up.
-  The 90-second dismiss window and the "a miss resets both checks, not just
-  the missed one" behavior were also design calls made without a confirmed
-  spec — reasonable defaults, not settled requirements.
+- **Awake check details beyond the on/off toggle aren't independently
+  configurable.** The 90-second dismiss window and "a miss resets both
+  checks, not just the missed one" are fixed behavior, not settled
+  requirements — reasonable defaults picked without a confirmed spec.
 - **iOS is not possible** in this form — iOS does not let third-party apps
   take over the lock screen or play unstoppable audio from the background.
 

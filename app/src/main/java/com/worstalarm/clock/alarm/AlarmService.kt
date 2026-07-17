@@ -201,26 +201,26 @@ class AlarmService : Service() {
 
     /**
      * The routine's final step was scanned (or the emergency game was completed) — reschedule
-     * for next time and drop the lock-screen takeover, then hand off to the awake-check
-     * cycle: the alarm isn't fully disabled until two "I'm awake" popups are dismissed.
+     * for next time and drop the lock-screen takeover. If this alarm has awake checks enabled
+     * ([AlarmEntity.awakeCheckEnabled]), hand off to that cycle: the alarm isn't fully
+     * disabled until two "I'm awake" popups are dismissed. Otherwise it's just done.
      */
     private fun completeRoutine() {
         stopAudioAndVibration()
 
         val s = AlarmSession.state.value
-        if (s != null) {
-            val alarm = s.alarmWithSteps.alarm
+        val alarm = s?.alarmWithSteps?.alarm
+        if (alarm != null) {
             AlarmScheduler.cancelStepRing(this, alarm.id)
             rescheduleOrDisableForNextOccurrence(alarm)
         }
 
         // Screen blocker removed the moment the routine is complete — awake checks (if
-        // any remain this cycle) run silently in the background from here.
+        // enabled and any remain this cycle) run silently in the background from here.
         AlarmSession.clear()
 
-        val alarmId = s?.alarmWithSteps?.alarm?.id
-        if (alarmId != null) {
-            serviceScope.launch { beginAwakeCheckCycle(alarmId) }
+        if (alarm != null && alarm.awakeCheckEnabled) {
+            serviceScope.launch { beginAwakeCheckCycle(alarm.id) }
         } else {
             stopSelfSafely()
         }

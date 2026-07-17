@@ -118,10 +118,12 @@ things only when they're verified working.
   - Decision logic factored into a pure, unit-tested `AwakeCheckPolicy` (mirrors `ScanValidator`'s
     pattern): random 5-15 min interval, the 2-dismissals-to-complete state transition, and the
     race guard that stops an already-resolved popup's timeout from being misread as a miss.
-  - Design calls made without an answered clarification (the spec didn't cover these; flagged
-    in the PR for review/override):
-    - **Always on for every alarm** — no per-alarm toggle. Simplest reading of the request;
-      easy to add a toggle later if it turns out to be unwanted for some alarms.
+  - **Per-alarm toggle** (`AlarmEntity.awakeCheckEnabled`, v3→v4 migration, default ON) — a
+    `Switch` in the alarm editor turns the whole cycle off for that alarm. `AlarmService`
+    only enters the cycle at routine-completion time if the alarm has it enabled; disabled
+    alarms behave exactly like before this feature existed.
+  - Remaining design calls made without an answered clarification (the spec didn't cover
+    these; flagged in the PR for review/override):
     - **A miss is a full reset** (both checks must be re-earned), not partial credit for a
       check already dismissed — matches "this will again trigger the awake checks" read
       literally as restarting the pair, not resuming mid-pair.
@@ -131,8 +133,9 @@ things only when they're verified working.
       same as a real final scan — otherwise it would be an unlimited bypass of a feature whose
       entire purpose is catching people who fall back asleep.
   - Tests: `AwakeCheckPolicyTest` (interval bounds, dismiss-outcome transitions, the stale-
-    timeout race guard) and `AlarmSessionTest` (pinning `currentStepIndex` at the final step
-    on a miss re-ring, and that scanning it correctly disarms via `ScanValidator`).
+    timeout race guard), `AlarmSessionTest` (pinning `currentStepIndex` at the final step
+    on a miss re-ring, and that scanning it correctly disarms via `ScanValidator`), and
+    `AlarmEntityTest` (the toggle defaults on).
 
 ## Phase 3 — Hardening (before giving it to anyone else)
 

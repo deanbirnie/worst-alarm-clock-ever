@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,6 +76,7 @@ fun AlarmEditScreen(
     var daysMask by remember { mutableStateOf(0b0011111) /* Mon-Fri */ }
     var enabled by remember { mutableStateOf(true) }
     var ringtoneUri by remember { mutableStateOf<String?>(null) }
+    var awakeCheckEnabled by remember { mutableStateOf(true) }
     var steps by remember { mutableStateOf(listOf<UiStep>()) }
     var loaded by remember { mutableStateOf(alarmId == 0L) }
     var showMultiStepWarning by remember { mutableStateOf(false) }
@@ -89,6 +91,7 @@ fun AlarmEditScreen(
                 daysMask = existing.alarm.daysMask
                 enabled = existing.alarm.enabled
                 ringtoneUri = existing.alarm.ringtoneUri
+                awakeCheckEnabled = existing.alarm.awakeCheckEnabled
                 steps = existing.orderedSteps.map {
                     UiStep(
                         locationLabel = it.step.locationLabel,
@@ -162,7 +165,8 @@ fun AlarmEditScreen(
                                 minute = minute,
                                 daysMask = daysMask,
                                 enabled = enabled,
-                                ringtoneUri = ringtoneUri
+                                ringtoneUri = ringtoneUri,
+                                awakeCheckEnabled = awakeCheckEnabled
                             )
                             val entities = steps.mapIndexed { idx, s ->
                                 RoutineStepEntity(
@@ -234,6 +238,25 @@ fun AlarmEditScreen(
                         currentUri = ringtoneUri,
                         onPicked = { ringtoneUri = it }
                     )
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Awake check", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "After the final scan, two silent popups (5-15 min apart) must " +
+                                "be dismissed before the alarm is fully off. Miss one and it " +
+                                "rings again.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = awakeCheckEnabled, onCheckedChange = { awakeCheckEnabled = it })
                 }
             }
 

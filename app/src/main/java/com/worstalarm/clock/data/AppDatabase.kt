@@ -21,7 +21,7 @@ import com.worstalarm.clock.data.entity.RoutineStepEntity
         RoutineStepEntity::class,
         AwakeCheckEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,13 +57,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v4: per-alarm toggle for the awake-check cycle. Defaults on for existing alarms. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE alarms ADD COLUMN awakeCheckEnabled INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "worst-alarm.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

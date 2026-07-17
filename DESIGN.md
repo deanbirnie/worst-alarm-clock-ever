@@ -269,14 +269,20 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
      ("Use the global sound from Settings" or the picked file's display
      name), then a `Row` with an `OutlinedButton` "Choose audio file" and,
      if a custom file is set, a `TextButton` "Reset".
-  5. Section header "Routine locations (in order)" (`titleMedium`) plus a
+  5. A `Card` (12dp inner padding) containing the **awake-check toggle
+     row**: a `Row`, center-aligned, with a `Column` (`weight(1f)`) holding
+     title "Awake check" (`titleSmall`) and a `bodySmall` explanatory line
+     ("After the final scan, two silent popups (5-15 min apart) must be
+     dismissed before the alarm is fully off. Miss one and it rings
+     again."), plus a trailing `Switch` — on by default for new alarms.
+  6. Section header "Routine locations (in order)" (`titleMedium`) plus a
      `bodySmall` explanatory line underneath.
-  6. One **Step Card** per routine step (§8.2.1), in order.
-  7. `OutlinedButton`, full width, icon+label "+ Add location" — disabled
+  7. One **Step Card** per routine step (§8.2.1), in order.
+  8. `OutlinedButton`, full width, icon+label "+ Add location" — disabled
      (grey) if the barcode library is empty, in which case a red
      (`error`-colored) `bodySmall` line appears below it: "Add barcodes to
      your library first (QR icon on the home screen)."
-  8. 24dp bottom spacer.
+  9. 24dp bottom spacer.
 - **"Adding a second location" warning dialog** (`AlertDialog`, triggered
   only when going from 1 → 2 steps): explains the phone will stay locked
   to the alarm until the final barcode is scanned, and that scanning ahead
