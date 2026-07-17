@@ -83,6 +83,18 @@ things only when they're verified working.
       boundary: only guards this activity; if the user escapes via a gesture-nav route
       (not key-interceptable) before the re-assert overlay kicks in, volume can still be
       changed in system Settings — see README's Honest limitations
+- [x] Fix (0.2.7): camera stuck open / flashlight blocked after scanning. Root cause —
+      CameraX's `bindToLifecycle` only auto-releases the camera when its `LifecycleOwner`
+      reaches `ON_DESTROY`, but the screen/dialog hosting `BarcodeScanner` (a nav
+      back-stack entry for the barcode-library "scan to fill value" dialog, or the whole
+      `AlarmActivity` ringing session for the alarm's scan panel) routinely stays RESUMED
+      long after the scanner itself is dismissed. The old cleanup only closed the ML Kit
+      client and its executor — it never called `unbindAll()` on the CameraX provider —
+      so the camera capture session (and the system's camera-in-use indicator, which
+      blocks torch access on many devices) stayed open indefinitely between scans. Fixed
+      with a new `CameraBindingGuard` that explicitly unbinds on Composable disposal and
+      guards the async-provider-resolves-after-dispose race so an orphaned binding can
+      never happen; unit-tested in `CameraBindingGuardTest` (JVM, no CameraX/Android deps)
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
 ## Phase 3 — Hardening (before giving it to anyone else)
