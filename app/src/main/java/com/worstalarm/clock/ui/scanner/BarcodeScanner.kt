@@ -50,6 +50,12 @@ fun BarcodeScanner(
                 .build()
         )
     }
+    // See CameraBindingGuard's doc: CameraX only auto-releases the camera when
+    // lifecycleOwner is destroyed, which outlives this composable (e.g. dismissing the
+    // "scan to fill value" dialog, or leaving the alarm's scanning panel). Without this,
+    // the camera — and the flashlight, which many devices refuse to share with it — stays
+    // locked until the whole hosting screen/activity is destroyed.
+    val cameraGuard = remember { CameraBindingGuard<ProcessCameraProvider>() }
 
     Box(modifier.fillMaxSize()) {
         AndroidView(
@@ -58,7 +64,7 @@ fun BarcodeScanner(
                 val previewView = PreviewView(ctx).apply {
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
-                startCamera(ctx, previewView, lifecycleOwner, executor, scanner) {
+                startCamera(ctx, previewView, lifecycleOwner, executor, scanner, cameraGuard) {
                     currentOnDetected(it)
                 }
                 previewView
@@ -68,6 +74,7 @@ fun BarcodeScanner(
 
     DisposableEffect(Unit) {
         onDispose {
+            cameraGuard.dispose { it.unbindAll() }
             executor.shutdown()
             scanner.close()
         }
@@ -81,39 +88,42 @@ private fun startCamera(
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     executor: ExecutorService,
     scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
+    cameraGuard: CameraBindingGuard<ProcessCameraProvider>,
     onDetected: (DetectedBarcode) -> Unit
 ) {
     val providerFuture = ProcessCameraProvider.getInstance(context)
     providerFuture.addListener({
         val provider = providerFuture.get()
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-        val analysis = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-        analysis.setAnalyzer(executor) { imageProxy ->
-            val mediaImage = imageProxy.image
-            if (mediaImage == null) { imageProxy.close(); return@setAnalyzer }
-            val input = InputImage.fromMediaImage(
-                mediaImage, imageProxy.imageInfo.rotationDegrees
-            )
-            scanner.process(input)
-                .addOnSuccessListener { barcodes ->
-                    barcodes.firstOrNull()?.rawValue?.let { raw ->
-                        onDetected(DetectedBarcode(raw, barcodes.first().format))
+        cameraGuard.bindIfNotDisposed(provider) { p ->
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+            val analysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+            analysis.setAnalyzer(executor) { imageProxy ->
+                val mediaImage = imageProxy.image
+                if (mediaImage == null) { imageProxy.close(); return@setAnalyzer }
+                val input = InputImage.fromMediaImage(
+                    mediaImage, imageProxy.imageInfo.rotationDegrees
+                )
+                scanner.process(input)
+                    .addOnSuccessListener { barcodes ->
+                        barcodes.firstOrNull()?.rawValue?.let { raw ->
+                            onDetected(DetectedBarcode(raw, barcodes.first().format))
+                        }
                     }
-                }
-                .addOnCompleteListener { imageProxy.close() }
+                    .addOnCompleteListener { imageProxy.close() }
+            }
+            try {
+                p.unbindAll()
+                p.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    analysis
+                )
+            } catch (_: Throwable) { /* camera unavailable */ }
         }
-        try {
-            provider.unbindAll()
-            provider.bindToLifecycle(
-                lifecycleOwner,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                analysis
-            )
-        } catch (_: Throwable) { /* camera unavailable */ }
     }, androidx.core.content.ContextCompat.getMainExecutor(context))
 }
