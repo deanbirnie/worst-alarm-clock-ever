@@ -97,6 +97,46 @@ things only when they're verified working.
       never happen; unit-tested in `CameraBindingGuardTest` (JVM, no CameraX/Android deps)
 - [ ] Verify v0.2 on a real phone (install APK, run one multi-step alarm)
 
+## Phase 2.6 — Awake check (v0.3.0, requested 2026-07-17)
+
+- [x] "Are you awake?" check after the routine's final scan: the screen blocker (AlarmActivity)
+      is removed the instant the final barcode is scanned, but the alarm isn't fully off yet.
+      Twice — each at a random point 5-15 minutes after the previous one resolves — a silent,
+      screen-waking popup appears and must be dismissed with an explicit "I'm awake" tap. A
+      popup that isn't dismissed within 90 seconds is a miss: BOTH checks reset, and the alarm
+      rings again requiring only the final location to be rescanned (not the whole path),
+      which re-enters the same awake-check cycle. Only after two dismissals in a row is the
+      alarm actually done.
+  - Persisted per-alarm in Room (`AwakeCheckEntity`: dismissed count, next-check time, current
+    popup's deadline) and scheduled via `AlarmManager.setAlarmClock` — same reasoning as
+    step-rings (0.2.1): a killed process or a sleeping device must not silently drop a pending
+    check. Re-armed on reboot (`BootReceiver`); cleaned up (schedule cancelled, row cascades
+    away) when an alarm is deleted.
+  - New `AwakeCheckActivity` shows the popup: screen-on, but deliberately NOT a lockdown like
+    the ringing screen — back/home work normally. Only the button counts as a response;
+    backing out just leaves the check pending until the timeout fires.
+  - Decision logic factored into a pure, unit-tested `AwakeCheckPolicy` (mirrors `ScanValidator`'s
+    pattern): random 5-15 min interval, the 2-dismissals-to-complete state transition, and the
+    race guard that stops an already-resolved popup's timeout from being misread as a miss.
+  - **Per-alarm toggle** (`AlarmEntity.awakeCheckEnabled`, v3→v4 migration, default ON) — a
+    `Switch` in the alarm editor turns the whole cycle off for that alarm. `AlarmService`
+    only enters the cycle at routine-completion time if the alarm has it enabled; disabled
+    alarms behave exactly like before this feature existed.
+  - Remaining design calls made without an answered clarification (the spec didn't cover
+    these; flagged in the PR for review/override):
+    - **A miss is a full reset** (both checks must be re-earned), not partial credit for a
+      check already dismissed — matches "this will again trigger the awake checks" read
+      literally as restarting the pair, not resuming mid-pair.
+    - **90-second dismiss timeout** for a shown popup — not specified in the request; long
+      enough to actually notice and respond, short enough not to sit lit indefinitely.
+    - **The emergency 500-tap escape hatch also enters the awake-check cycle** on completion,
+      same as a real final scan — otherwise it would be an unlimited bypass of a feature whose
+      entire purpose is catching people who fall back asleep.
+  - Tests: `AwakeCheckPolicyTest` (interval bounds, dismiss-outcome transitions, the stale-
+    timeout race guard), `AlarmSessionTest` (pinning `currentStepIndex` at the final step
+    on a miss re-ring, and that scanning it correctly disarms via `ScanValidator`), and
+    `AlarmEntityTest` (the toggle defaults on).
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 - [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)

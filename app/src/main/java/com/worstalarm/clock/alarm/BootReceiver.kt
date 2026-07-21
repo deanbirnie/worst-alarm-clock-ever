@@ -21,8 +21,29 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 val alarms = app.repository.getAllEnabledAlarms().map { it.alarm }
                 AlarmScheduler.rescheduleAll(context, alarms)
+                rearmAwakeChecks(context, app)
             } finally {
                 pending.finish()
+            }
+        }
+    }
+
+    /**
+     * Re-arms any awake-check cycles that were mid-flight when the device rebooted / the
+     * process died. A popup that was already showing (popupDeadlineAtMs set) re-arms its
+     * miss deadline; otherwise the next popup's show time is re-armed. Either re-arm can
+     * land in the past — AlarmManager fires past-due exact alarms immediately, so an
+     * overdue check resolves (as a miss, or by showing) the moment this finishes rather
+     * than silently vanishing.
+     */
+    private suspend fun rearmAwakeChecks(context: Context, app: WorstAlarmApp) {
+        app.repository.getAllAwakeChecks().forEach { row ->
+            if (row.popupDeadlineAtMs > 0L) {
+                AlarmScheduler.scheduleAwakeCheckTimeout(context, row.alarmId, row.popupDeadlineAtMs)
+            } else {
+                AlarmScheduler.scheduleAwakeCheck(
+                    context, row.alarmId, row.nextCheckAtMs, row.dismissedCount
+                )
             }
         }
     }

@@ -46,10 +46,15 @@ object AlarmSession {
 
     val isActive: Boolean get() = _state.value != null
 
-    fun start(alarmWithSteps: AlarmWithSteps) {
+    /**
+     * [startAtStepIndex] defaults to the top of the routine. A missed awake check re-rings
+     * pinned at the last step instead — the user already proved they can reach every
+     * earlier location; only the final one needs rescanning to try the awake checks again.
+     */
+    fun start(alarmWithSteps: AlarmWithSteps, startAtStepIndex: Int = 0) {
         _state.value = State(
             alarmWithSteps = alarmWithSteps,
-            currentStepIndex = 0,
+            currentStepIndex = startAtStepIndex,
             isRingingNow = true,
             nextRingAtMs = 0L,
             inEmergencyMode = false,

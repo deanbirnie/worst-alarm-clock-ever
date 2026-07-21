@@ -87,6 +87,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteAlarm(alarm: AlarmEntity) {
         viewModelScope.launch {
             AlarmScheduler.cancel(appContext, alarm.id)
+            AlarmScheduler.cancelStepRing(appContext, alarm.id)
+            AlarmScheduler.cancelAwakeCheck(appContext, alarm.id)
+            AlarmScheduler.cancelAwakeCheckTimeout(appContext, alarm.id)
+            // The awake_checks row (if any) cascades away with the alarm via its foreign key.
             withContext(Dispatchers.IO) { repo.deleteAlarm(alarm.id) }
         }
     }

@@ -12,6 +12,8 @@ import java.util.Calendar
 object AlarmScheduler {
 
     private const val EXTRA_ALARM_ID = "alarm_id"
+    private const val EXTRA_DISMISSED_COUNT = "dismissed_count"
+    private const val EXTRA_DEADLINE = "deadline_at_ms"
 
     /** Fired when an alarm's scheduled time arrives (step 0 of the routine). */
     const val ACTION_FIRE = "com.worstalarm.clock.ALARM_FIRE"
@@ -19,9 +21,21 @@ object AlarmScheduler {
     /** Fired when the quiet pause between routine steps ends and the next step must ring. */
     const val ACTION_STEP_RING = "com.worstalarm.clock.STEP_RING"
 
+    /** Fired when a post-routine "are you awake" popup is due to appear. */
+    const val ACTION_AWAKE_CHECK = "com.worstalarm.clock.AWAKE_CHECK"
+
+    /** Fired when a shown awake-check popup's dismiss deadline expires. */
+    const val ACTION_AWAKE_CHECK_TIMEOUT = "com.worstalarm.clock.AWAKE_CHECK_TIMEOUT"
+
     fun alarmIdFromIntent(intent: Intent?): Long? =
         intent?.takeIf { it.hasExtra(EXTRA_ALARM_ID) }?.getLongExtra(EXTRA_ALARM_ID, -1L)
             ?.takeIf { it > 0 }
+
+    fun dismissedCountFromIntent(intent: Intent?): Int =
+        intent?.getIntExtra(EXTRA_DISMISSED_COUNT, 0) ?: 0
+
+    fun deadlineFromIntent(intent: Intent?): Long =
+        intent?.getLongExtra(EXTRA_DEADLINE, -1L) ?: -1L
 
     fun schedule(context: Context, alarm: AlarmEntity) {
         val am = context.getSystemService(AlarmManager::class.java) ?: return
@@ -68,6 +82,48 @@ object AlarmScheduler {
         stepPendingIntent(context, alarmId, create = false)?.let { am.cancel(it) }
     }
 
+    /**
+     * Arms the next "are you awake" popup. [dismissedCount] (0 or 1) travels with the
+     * PendingIntent's extras purely so the receiver can show "check 1 of 2" / "check 2 of
+     * 2" the instant the popup appears, without waiting on an async DB read first.
+     */
+    fun scheduleAwakeCheck(context: Context, alarmId: Long, triggerAtMs: Long, dismissedCount: Int) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val pi = awakeCheckPendingIntent(context, alarmId, dismissedCount, create = true) ?: return
+        val showIntent = PendingIntent.getActivity(
+            context,
+            alarmId.toInt(),
+            Intent(context, MainActivity::class.java),
+            pendingIntentFlags()
+        )
+        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMs, showIntent), pi)
+    }
+
+    fun cancelAwakeCheck(context: Context, alarmId: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        awakeCheckPendingIntent(context, alarmId, dismissedCount = 0, create = false)?.let { am.cancel(it) }
+    }
+
+    /** Arms the miss deadline for a popup that's currently shown. */
+    fun scheduleAwakeCheckTimeout(context: Context, alarmId: Long, deadlineAtMs: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val pi = awakeCheckTimeoutPendingIntent(context, alarmId, deadlineAtMs, create = true) ?: return
+        val showIntent = PendingIntent.getActivity(
+            context,
+            alarmId.toInt(),
+            Intent(context, MainActivity::class.java),
+            pendingIntentFlags()
+        )
+        am.setAlarmClock(AlarmManager.AlarmClockInfo(deadlineAtMs, showIntent), pi)
+    }
+
+    fun cancelAwakeCheckTimeout(context: Context, alarmId: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        // The deadline value isn't part of PendingIntent equality (only action/data/component
+        // are), so any placeholder works here for the FLAG_NO_CREATE lookup.
+        awakeCheckTimeoutPendingIntent(context, alarmId, 0L, create = false)?.let { am.cancel(it) }
+    }
+
     fun rescheduleAll(context: Context, alarms: List<AlarmEntity>) {
         alarms.forEach { if (it.enabled) schedule(context, it) else cancel(context, it.id) }
     }
@@ -90,6 +146,32 @@ object AlarmScheduler {
             action = ACTION_STEP_RING
             putExtra(EXTRA_ALARM_ID, alarmId)
             data = android.net.Uri.parse("worstalarm://alarm/$alarmId/step")
+        }
+        val flags = pendingIntentFlags() or (if (!create) PendingIntent.FLAG_NO_CREATE else 0)
+        return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
+    }
+
+    private fun awakeCheckPendingIntent(
+        context: Context, alarmId: Long, dismissedCount: Int, create: Boolean
+    ): PendingIntent? {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_AWAKE_CHECK
+            putExtra(EXTRA_ALARM_ID, alarmId)
+            putExtra(EXTRA_DISMISSED_COUNT, dismissedCount)
+            data = android.net.Uri.parse("worstalarm://alarm/$alarmId/awake-check")
+        }
+        val flags = pendingIntentFlags() or (if (!create) PendingIntent.FLAG_NO_CREATE else 0)
+        return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)
+    }
+
+    private fun awakeCheckTimeoutPendingIntent(
+        context: Context, alarmId: Long, deadlineAtMs: Long, create: Boolean
+    ): PendingIntent? {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_AWAKE_CHECK_TIMEOUT
+            putExtra(EXTRA_ALARM_ID, alarmId)
+            putExtra(EXTRA_DEADLINE, deadlineAtMs)
+            data = android.net.Uri.parse("worstalarm://alarm/$alarmId/awake-check-timeout")
         }
         val flags = pendingIntentFlags() or (if (!create) PendingIntent.FLAG_NO_CREATE else 0)
         return PendingIntent.getBroadcast(context, alarmId.toInt(), intent, flags)

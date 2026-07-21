@@ -55,6 +55,17 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.WorstAlarm.FullScreen" />
 
+        <!-- Silent "are you awake" popup: screen-on, but not a lockdown like AlarmActivity -->
+        <activity
+            android:name=".alarm.AwakeCheckActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.WorstAlarm.FullScreen" />
+
         <service
             android:name=".alarm.AlarmService"
             android:exported="false"

@@ -20,6 +20,8 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.worstalarm.clock.R
 import com.worstalarm.clock.WorstAlarmApp
+import com.worstalarm.clock.data.entity.AlarmEntity
+import com.worstalarm.clock.data.entity.AwakeCheckEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,7 +67,10 @@ class AlarmService : Service() {
             ACTION_ENTER_EMERGENCY -> handleEnterEmergency()
             ACTION_EXIT_EMERGENCY -> handleExitEmergency()
             ACTION_EMERGENCY_IDLE_RESET -> handleEmergencyIdleReset()
-            ACTION_EMERGENCY_COMPLETE, ACTION_DISARM -> disarmAndStop()
+            ACTION_EMERGENCY_COMPLETE, ACTION_DISARM -> completeRoutine()
+            ACTION_AWAKE_CHECK_SHOW -> handleAwakeCheckShow(intent)
+            ACTION_AWAKE_CHECK_DISMISS -> handleAwakeCheckDismiss(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
+            ACTION_AWAKE_CHECK_TIMEOUT -> handleAwakeCheckTimeout(intent)
         }
         return START_STICKY
     }
@@ -126,7 +131,7 @@ class AlarmService : Service() {
         stopAudioAndVibration()
 
         if (decision == ScanValidator.Decision.DISARM) {
-            disarmAndStop()
+            completeRoutine()
             return
         }
 
@@ -194,27 +199,151 @@ class AlarmService : Service() {
         ringCurrentStep()
     }
 
-    private fun disarmAndStop() {
+    /**
+     * The routine's final step was scanned (or the emergency game was completed) — reschedule
+     * for next time and drop the lock-screen takeover. If this alarm has awake checks enabled
+     * ([AlarmEntity.awakeCheckEnabled]), hand off to that cycle: the alarm isn't fully
+     * disabled until two "I'm awake" popups are dismissed. Otherwise it's just done.
+     */
+    private fun completeRoutine() {
         stopAudioAndVibration()
 
-        // Reschedule if recurring.
         val s = AlarmSession.state.value
-        if (s != null) {
-            AlarmScheduler.cancelStepRing(this, s.alarmWithSteps.alarm.id)
-            val alarm = s.alarmWithSteps.alarm
-            if (alarm.daysMask != 0) {
-                AlarmScheduler.schedule(this, alarm)
-            } else {
-                // One-shot alarm: disable it after firing.
-                val app = application as WorstAlarmApp
-                serviceScope.launch {
-                    withIO { app.repository.setEnabled(alarm.id, false) }
-                }
-            }
+        val alarm = s?.alarmWithSteps?.alarm
+        if (alarm != null) {
+            AlarmScheduler.cancelStepRing(this, alarm.id)
+            rescheduleOrDisableForNextOccurrence(alarm)
         }
 
+        // Screen blocker removed the moment the routine is complete — awake checks (if
+        // enabled and any remain this cycle) run silently in the background from here.
         AlarmSession.clear()
+
+        if (alarm != null && alarm.awakeCheckEnabled) {
+            serviceScope.launch { beginAwakeCheckCycle(alarm.id) }
+        } else {
+            stopSelfSafely()
+        }
+    }
+
+    /** Idempotent: safe to call again on a miss-triggered re-ring without double effects. */
+    private fun rescheduleOrDisableForNextOccurrence(alarm: AlarmEntity) {
+        if (alarm.daysMask != 0) {
+            AlarmScheduler.schedule(this, alarm)
+        } else {
+            val app = application as WorstAlarmApp
+            serviceScope.launch { withIO { app.repository.setEnabled(alarm.id, false) } }
+        }
+    }
+
+    // -------- Awake checks --------
+    // After the routine's final step, two silent "are you awake?" popups must be dismissed,
+    // each appearing at a random point 5-15 minutes after the previous one resolves, before
+    // the alarm is fully off. Missing either one's 90s dismiss deadline is a full reset: the
+    // cycle starts over from a fresh re-ring that only requires the final step to be rescanned.
+    // State is persisted in Room (AwakeCheckEntity) and scheduled via AlarmManager — same
+    // reasoning as step-rings: a killed process or sleeping device must not silently drop it.
+
+    private suspend fun beginAwakeCheckCycle(alarmId: Long) {
+        val app = application as WorstAlarmApp
+        val nextAt = System.currentTimeMillis() + AwakeCheckPolicy.randomIntervalMs()
+        withIO {
+            app.repository.saveAwakeCheck(
+                AwakeCheckEntity(
+                    alarmId = alarmId,
+                    dismissedCount = 0,
+                    nextCheckAtMs = nextAt,
+                    popupDeadlineAtMs = 0L
+                )
+            )
+        }
+        AlarmScheduler.scheduleAwakeCheck(this, alarmId, nextAt, dismissedCount = 0)
         stopSelfSafely()
+    }
+
+    /** An armed popup's time has come. No audio — just wake the screen and show it. */
+    private fun handleAwakeCheckShow(intent: Intent) {
+        val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+        val dismissedCount = intent.getIntExtra(EXTRA_DISMISSED_COUNT, 0)
+        if (alarmId <= 0) { stopSelfSafely(); return }
+
+        // Set synchronously so the activity (already being launched by AlarmReceiver) has
+        // something to show without waiting on the DB round-trip below.
+        AwakeCheckSession.show(alarmId, dismissedCount + 1)
+
+        serviceScope.launch {
+            val app = application as WorstAlarmApp
+            val row = withIO { app.repository.getAwakeCheck(alarmId) }
+            if (row != null) {
+                val deadline = System.currentTimeMillis() + AwakeCheckPolicy.POPUP_TIMEOUT_MS
+                withIO { app.repository.saveAwakeCheck(row.copy(popupDeadlineAtMs = deadline)) }
+                AlarmScheduler.scheduleAwakeCheckTimeout(this@AlarmService, alarmId, deadline)
+            }
+            stopSelfSafely()
+        }
+    }
+
+    /** The user tapped "I'm awake". */
+    private fun handleAwakeCheckDismiss(alarmId: Long) {
+        if (alarmId <= 0) { stopSelfSafely(); return }
+        AlarmScheduler.cancelAwakeCheckTimeout(this, alarmId)
+        AwakeCheckSession.clear()
+
+        serviceScope.launch {
+            val app = application as WorstAlarmApp
+            val row = withIO { app.repository.getAwakeCheck(alarmId) }
+            if (row == null) { stopSelfSafely(); return@launch }
+
+            when (val outcome = AwakeCheckPolicy.onDismiss(row.dismissedCount)) {
+                is AwakeCheckPolicy.DismissOutcome.CycleComplete -> {
+                    withIO { app.repository.clearAwakeCheck(alarmId) }
+                }
+                is AwakeCheckPolicy.DismissOutcome.ScheduleNext -> {
+                    val nextAt = System.currentTimeMillis() + AwakeCheckPolicy.randomIntervalMs()
+                    withIO {
+                        app.repository.saveAwakeCheck(
+                            row.copy(
+                                dismissedCount = outcome.newDismissedCount,
+                                nextCheckAtMs = nextAt,
+                                popupDeadlineAtMs = 0L
+                            )
+                        )
+                    }
+                    AlarmScheduler.scheduleAwakeCheck(
+                        this@AlarmService, alarmId, nextAt, outcome.newDismissedCount
+                    )
+                }
+            }
+            stopSelfSafely()
+        }
+    }
+
+    /** A shown popup's dismiss deadline expired — verify it's genuine, then re-ring. */
+    private fun handleAwakeCheckTimeout(intent: Intent) {
+        val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+        val expectedDeadline = intent.getLongExtra(EXTRA_DEADLINE, -1L)
+        if (alarmId <= 0) { stopSelfSafely(); return }
+
+        serviceScope.launch {
+            val app = application as WorstAlarmApp
+            val row = withIO { app.repository.getAwakeCheck(alarmId) }
+            if (row == null || !AwakeCheckPolicy.isGenuineMiss(row.popupDeadlineAtMs, expectedDeadline)) {
+                // Already dismissed, or superseded by a later check — ignore.
+                stopSelfSafely()
+                return@launch
+            }
+
+            withIO { app.repository.clearAwakeCheck(alarmId) }
+            AwakeCheckSession.clear()
+
+            val alarm = withIO { app.repository.getAlarm(alarmId) }
+            if (alarm == null || alarm.orderedSteps.isEmpty()) { stopSelfSafely(); return@launch }
+
+            customToneUri = alarm.alarm.ringtoneUri
+                ?: withIO { app.settings.globalRingtoneUri.first() }
+            AlarmSession.start(alarm, startAtStepIndex = alarm.orderedSteps.size - 1)
+            ringCurrentStep()
+        }
     }
 
     private fun stopSelfSafely() {
@@ -347,10 +476,15 @@ class AlarmService : Service() {
         const val ACTION_EMERGENCY_IDLE_RESET = "com.worstalarm.EMERGENCY_IDLE_RESET"
         const val ACTION_EMERGENCY_COMPLETE = "com.worstalarm.EMERGENCY_COMPLETE"
         const val ACTION_DISARM = "com.worstalarm.DISARM"
+        const val ACTION_AWAKE_CHECK_SHOW = "com.worstalarm.AWAKE_CHECK_SHOW"
+        const val ACTION_AWAKE_CHECK_DISMISS = "com.worstalarm.AWAKE_CHECK_DISMISS"
+        const val ACTION_AWAKE_CHECK_TIMEOUT = "com.worstalarm.AWAKE_CHECK_TIMEOUT"
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_STEP_INDEX = "step_index"
         const val EXTRA_SCANNED_VALUE = "scanned_value"
         const val EXTRA_SCANNED_FORMAT = "scanned_format"
+        const val EXTRA_DISMISSED_COUNT = "dismissed_count"
+        const val EXTRA_DEADLINE = "deadline_at_ms"
         const val NOTIFICATION_ID = 0xA1A2
     }
 }
