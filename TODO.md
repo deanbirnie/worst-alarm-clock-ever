@@ -177,11 +177,41 @@ things only when they're verified working.
       validation, awake-check policy, camera guard) all still pass — the redesign
       touched no alarm behavior.
 
+## Phase 2.9 — Direct Boot: fire before first unlock (v0.4.1)
+
+- [x] Alarms now fire in Android's **Direct Boot** window — after a reboot (e.g. an
+      overnight OS auto-update) but before the user's first unlock. Previously the
+      boot receiver couldn't read the alarm DB until unlock, so an early-morning alarm
+      set before an overnight update would silently never ring.
+- [x] Room DB moved to **device-protected storage** (`createDeviceProtectedStorageContext`)
+      with a one-time `moveDatabaseFrom` migration so existing users keep their alarms.
+      Same for the settings DataStore (best-effort file copy). Trade-off accepted with the
+      user: device-key encryption at rest instead of credential-key (alarm times / barcode
+      values, not secrets — the AOSP Clock approach).
+- [x] `BootReceiver`, `AlarmReceiver`, `AlarmService`, `AlarmActivity`, `OverlayService`,
+      `AwakeCheckActivity` marked `android:directBootAware="true"`; boot receiver already
+      listened for `LOCKED_BOOT_COMPLETED`.
+- [x] Scope confirmed with the user: the guaranteed win is that the alarm **fires**
+      (rings/vibrates/lights the screen); scanning to disarm can require the user to unlock,
+      which is fine. Custom tones in locked media storage fall back to the system alarm tone
+      pre-unlock (existing fallback chain in `AlarmService.startAudioAndVibration`).
+- [ ] **Needs on-device verification** (not testable in the JVM/CI sandbox): set an alarm,
+      reboot, and confirm it fires while still on the lock screen without unlocking; verify
+      the DB migration preserves alarms across the upgrade; confirm sound falls back
+      gracefully pre-unlock. Track alongside the other device checks in BUGS.md.
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
-- [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)
-- [ ] Unit tests for the `AlarmService` ring/scan/disarm state machine
-- [ ] Compose UI smoke test: create alarm → shows in list → toggle works
+> See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit
+> (v0.4.0). The three items below are tracked there in more detail (C2, C7, C8),
+> alongside 9 potential bugs (B1–B9) found reading the whole repo.
+
+- [ ] Fix B1 (foreground service can get stuck after a sticky restart) — see BUGS.md
+- [ ] Fix B2 (two alarms at the same minute: second clobbers the first) — see BUGS.md
+- [ ] Add Robolectric/instrumented infra so Room + service + Compose can be tested at all (BUGS.md C3/C7/C8)
+- [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge) — BUGS.md C2
+- [ ] Unit tests for the `AlarmService` ring/scan/disarm state machine — BUGS.md C7
+- [ ] Compose UI smoke test: create alarm → shows in list → toggle works — BUGS.md C8
 - [ ] Enable Room `exportSchema` + committed schema JSON, adopt real migrations (required before first public release)
 - [ ] Custom app icon (current one is a placeholder vector)
 - [ ] Custom alarm sound picker (currently always the system default alarm tone)
