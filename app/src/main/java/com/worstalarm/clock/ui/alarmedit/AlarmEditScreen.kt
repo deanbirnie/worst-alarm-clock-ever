@@ -24,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +51,7 @@ import com.worstalarm.clock.data.entity.AlarmEntity
 import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.data.entity.RoutineStepEntity
 import com.worstalarm.clock.ui.AppViewModel
+import com.worstalarm.clock.ui.components.DayOfWeekSelector
 import com.worstalarm.clock.ui.components.NumberStepperField
 import com.worstalarm.clock.ui.settings.AlarmTonePickerRow
 
@@ -217,20 +217,11 @@ fun AlarmEditScreen(
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Time: %02d:%02d".format(hour, minute)) }
 
-            Text("Days")
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val names = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-                names.forEachIndexed { i, d ->
-                    FilterChip(
-                        selected = (daysMask shr i) and 1 == 1,
-                        onClick = { daysMask = daysMask xor (1 shl i) },
-                        label = { Text(d) }
-                    )
-                }
-            }
+            Text("Repeat", style = MaterialTheme.typography.titleSmall)
+            DayOfWeekSelector(
+                daysMask = daysMask,
+                onMaskChange = { daysMask = it }
+            )
             if (daysMask == 0) {
                 Text(
                     "One-time: will fire at the next occurrence of this time, then disable itself.",

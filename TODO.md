@@ -149,6 +149,34 @@ things only when they're verified working.
       Unit-tested in `NextRingFormatterTest` (delta formatting + end-to-end with a
       fixed clock: later-today, rolled-to-tomorrow, recurring-weekday, disabled).
 
+## Phase 2.8 — v0.4.0 "classy" UI redesign
+
+- [x] Theme tokens: custom softly-rounded `Shapes` (cards 18dp, dialogs 32dp) and a
+      few type-scale weight overrides (displaySmall/headlineMedium/titleMedium/
+      titleSmall → SemiBold) so the app reads as designed, not default. The warm
+      sunrise **color palette is unchanged** — it was already the point.
+- [x] Day-of-week selector rebuilt (`DayOfWeekSelector`): 7 circular single-letter
+      bubbles running **Sunday-first** (S M T W T F S), each `weight(1f)` at 1:1
+      aspect ratio so the row fits the exact width of any screen — replacing the
+      Mon-first `FilterChip` row that overflowed. Selected = filled primary circle;
+      unselected = outlined surfaceVariant. Full day names as contentDescription.
+- [x] CRITICAL invariant, unit-tested: display order changed to Sunday-first but
+      the stored `daysMask` keeps its ISO layout (bit 0 = Monday … bit 6 = Sunday),
+      so no existing alarm shifts its firing days. `WeekdayOrder` is the single
+      display↔storage mapping point; `WeekdayOrderTest` pins the bit mapping AND
+      proves end-to-end (through `AlarmScheduler.computeNextTriggerMs`) that
+      tapping the Sunday bubble produces an alarm that fires on a Sunday.
+- [x] Alarm list redesign: whole-card-tappable rows (Edit button removed), time at
+      `displaySmall` anchoring each card, tonal surfaceVariant container when
+      enabled / dimmed 45%-alpha content when disabled, and one quiet summary line
+      via new `DaySummaryFormatter` ("Weekdays · 3 locations"; named patterns
+      collapse to "Every day"/"Weekdays"/"Weekends"/"One-time", others list
+      Sunday-first: "Sun · Wed · Fri") — unit-tested in `DaySummaryFormatterTest`.
+- [x] Friendly empty state (centered ☀️ + "No alarms yet") instead of a bare caption.
+- [x] Existing JVM suites (scheduler math via `NextRingFormatterTest`, scan
+      validation, awake-check policy, camera guard) all still pass — the redesign
+      touched no alarm behavior.
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 - [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)

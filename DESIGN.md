@@ -5,11 +5,12 @@ every color, type style, spacing value, icon, and screen layout as actually
 implemented in code — so it can be reconstructed pixel-for-pixel in a design
 tool. This is a description of what exists today, not a proposal.
 
-The app is built with **Jetpack Compose + Material Design 3**. It uses M3's
-stock component shapes and type scale throughout (no custom typography or
-shape theme is defined) — only the **color scheme** is customized. Where this
-doc says "Material 3 default," it means the component looks exactly like
-stock M3 with no overrides.
+The app is built with **Jetpack Compose + Material Design 3**. As of the
+v0.4 redesign it customizes the **color scheme** (§2), a **softly rounded
+shape set** (§4), and a handful of **type-scale weight overrides** (§3);
+everything not listed in those sections is stock M3. Where this doc says
+"Material 3 default," it means the component looks exactly like stock M3
+with no overrides.
 
 ---
 
@@ -94,13 +95,22 @@ colors — not manually specified.
 
 ## 3. Typography
 
-No custom font or type scale is defined — this is **stock Material 3
-typography** (Roboto on Android). Only the specific styles actually used in
-this app are listed; treat any unlisted M3 style as available but unused.
+No custom font — Roboto (stock Android) throughout. As of the v0.4
+redesign, a few M3 styles are overridden for more presence; everything
+else is the stock M3 scale:
 
-| M3 style | Size / weight (M3 default) | Used for |
+| Overridden style | Change from M3 default |
+|---|---|
+| `displaySmall` | weight → **SemiBold** (alarm-list clock time) |
+| `headlineMedium` | weight → **SemiBold** |
+| `titleMedium` | weight → **SemiBold**, letterSpacing +0.2sp |
+| `titleSmall` | weight → **SemiBold** |
+
+Styles actually in use:
+
+| M3 style | Size / weight | Used for |
 |---|---|---|
-| `headlineMedium` | 28sp / Regular | Alarm list row — the big HH:MM time |
+| `displaySmall` | 36sp / SemiBold | Alarm list row — the big HH:MM time |
 | `headlineSmall` | 24sp / Regular | Ringing screen alarm label; Emergency screen title; Nav drawer title uses `titleMedium` not this |
 | `titleLarge` | 22sp / Regular | About screen app name |
 | `titleMedium` | 16sp / Medium | Section headers ("Routine locations (in order)"), nav-drawer header text |
@@ -128,18 +138,30 @@ maximum legibility at a glance matters most:
 
 ## 4. Shape language
 
-No custom `Shapes` are defined — this is **stock Material 3 shape theming**:
+As of the v0.4 redesign, a custom `Shapes` set softens every corner —
+"warm and pillowy rather than boxy":
 
-| Component | M3 default corner radius |
+| M3 shape slot | Radius (was M3 default) |
 |---|---|
-| `Card` | 12dp (medium) all corners |
-| `Button` / `OutlinedButton` / `TextButton` | Fully rounded ("stadium" / pill shape) |
-| `FloatingActionButton` | 16dp (large) |
-| `OutlinedTextField` | 4dp top corners (extraSmall) — square-ish, standard M3 text field look |
-| `AlertDialog` | 28dp (extraLarge) |
-| `FilterChip` / `AssistChip` | 8dp (small) |
+| `extraSmall` | 8dp (was 4dp) — text fields' top corners |
+| `small` | 12dp (was 8dp) — chips |
+| `medium` | **18dp** (was 12dp) — all `Card`s |
+| `large` | 24dp (was 16dp) — FAB |
+| `extraLarge` | 32dp (was 28dp) — dialogs, drawer sheet |
+
+Component notes:
+
+| Component | Effective corner radius |
+|---|---|
+| `Card` | 18dp (medium) all corners |
+| `Button` / `OutlinedButton` / `TextButton` | Fully rounded ("stadium" / pill shape — unchanged, not shape-slot driven) |
+| `FloatingActionButton` | 24dp (large) |
+| `OutlinedTextField` | 8dp top corners (extraSmall) |
+| `AlertDialog` | 32dp (extraLarge) |
+| `AssistChip` | 12dp (small) |
 | `NavigationDrawerItem` (selected pill) | Fully rounded |
-| Emergency-game grid tiles | 12dp explicit `RoundedCornerShape` (matches Card radius) |
+| Day-of-week selector bubbles | `CircleShape` (perfect circles) |
+| Emergency-game grid tiles | 12dp explicit `RoundedCornerShape` |
 
 ---
 
@@ -225,18 +247,26 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
      over other apps" isn't granted): a `Card` containing bold title
      "Grant 'Display over other apps'", a `bodySmall` explanation line, an
      8dp spacer, and an `OutlinedButton` "Open settings".
-  2. **Empty state** (if no alarms): plain `onSurfaceVariant`-colored text,
-     "No alarms yet. Tap + to set your first routine."
-  3. **Alarm list** (if alarms exist): a `LazyColumn`, 10dp vertical gaps
+  2. **Empty state** (if no alarms): centered in the remaining space — a
+     ☀️ glyph at 44sp, 12dp gap, "No alarms yet" in `titleMedium`, 4dp gap,
+     "Tap + to build your first wake-up routine." in `onSurfaceVariant`.
+  3. **Alarm list** (if alarms exist): a `LazyColumn`, 12dp vertical gaps
      between cards, 80dp bottom content padding (clears the FAB). Each row
-     is a `Card` containing:
-     - A `Row` (16dp padding): left column = time in `headlineMedium`
-       ("07:00"), optional label line below it, days-of-week in
-       `bodySmall`/`onSurfaceVariant` ("Mon Tue Wed Thu Fri" or "One-time"),
-       location count line ("2 locations") in `bodySmall`. Right side: a
-       `Switch` toggling enabled/disabled.
-     - A second `Row` below (16dp horizontal / 4dp vertical padding)
-       containing a single `OutlinedButton` labeled "Edit".
+     is a single **whole-card-tappable** `Card` (tap opens the editor — no
+     separate "Edit" button) whose container is `surfaceVariant` when the
+     alarm is enabled and plain `surface` when disabled. Inside, one `Row`
+     (20dp horizontal / 16dp vertical padding), vertically centered:
+     - Left column (`weight(1f)`): the time in `displaySmall` ("07:00") —
+       the anchor of the card; optional label line in
+       `titleSmall`/`primary`; 4dp gap; one quiet summary line in
+       `bodySmall`/`onSurfaceVariant` combining the day summary and the
+       location count with a middle dot: "Weekdays · 3 locations". Day
+       summaries collapse named patterns to words — "Every day",
+       "Weekdays", "Weekends", "One-time" — and otherwise list days
+       Sunday-first: "Sun · Wed · Fri" (`DaySummaryFormatter`).
+     - Right side: a `Switch` toggling enabled/disabled.
+     - **Disabled dimming:** all text in a disabled alarm's card renders at
+       45% alpha (the `Switch` stays full-strength).
 - **Navigation drawer** (`ModalNavigationDrawer` + `ModalDrawerSheet`,
   slides from the left): header text "Worst Alarm Clock Ever" in
   `titleMedium` (16dp padding all around), then four `NavigationDrawerItem`
@@ -262,10 +292,20 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
   1. `OutlinedTextField` — "Label (optional)".
   2. `OutlinedButton`, full width — "Time: 07:00" (opens the platform's
      native `TimePickerDialog` on tap).
-  3. "Days" label, then a `Row` of 7 `FilterChip`s (Mon–Sun, 4dp gaps),
-     each independently toggleable. If none are selected, a `bodySmall`
-     helper line appears: "One-time: will fire at the next occurrence of
-     this time, then disable itself."
+  3. "Repeat" label (`titleSmall`), then the **day-of-week selector**
+     (`DayOfWeekSelector`): a full-width `Row` of 7 circular single-letter
+     bubbles running **Sunday-first** — S M T W T F S — with 6dp gaps.
+     Each bubble takes an equal `weight(1f)` of the row at 1:1 aspect
+     ratio, so the selector always fits the exact screen width with
+     perfectly round bubbles. Selected bubble: `primary` fill, `onPrimary`
+     Bold letter. Unselected: `surfaceVariant` fill, 1dp 35%-alpha
+     `outline` ring, `onSurfaceVariant` Medium letter. Bubbles carry the
+     full day name as their accessibility `contentDescription`. (Display
+     order is Sunday-first, but storage stays ISO bit 0 = Monday … bit 6 =
+     Sunday — `WeekdayOrder` maps between the two and is unit-tested so
+     the redesign can't shift existing alarms' firing days.) If no days
+     are selected, a `bodySmall` helper line appears: "One-time: will fire
+     at the next occurrence of this time, then disable itself."
   4. A `Card` (12dp inner padding) containing the **alarm-tone picker
      row** (§8.8): title "Alarm sound (this alarm)", current-value caption
      ("Use the global sound from Settings" or the picked file's display

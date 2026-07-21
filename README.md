@@ -103,7 +103,8 @@ Three screens, kept deliberately simple:
   `+` creates an alarm; the QR icon in the top bar opens the barcode library.
 - **Barcode library.** Your saved codes with name, value, and format.
   Add/edit via a dialog that lets you scan with the camera or type a value.
-- **Alarm editor.** Label, time picker, weekday chips, and the ordered list
+- **Alarm editor.** Label, time picker, a Sunday-first row of round
+  single-letter day bubbles that fits any screen width, and the ordered list
   of routine steps — each step names a location, picks a barcode from the
   library, and (except the last) sets the quiet delay before the next ring.
 
