@@ -1,11 +1,17 @@
 package com.worstalarm.clock.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Sunrise palette: warm ambers, golds, and dusky roses over deep warm browns.
@@ -56,8 +62,43 @@ private val SunriseLight = lightColorScheme(
     onError = Color(0xFFFFFFFF)
 )
 
+/**
+ * Softly rounded corner system (v0.4 redesign): cards and dialogs get generous
+ * radii so the whole app reads as warm and pillowy rather than boxy — fitting
+ * for something you squint at half-asleep.
+ */
+private val SunriseShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp)
+)
+
+/**
+ * Stock M3 (Roboto) type scale with a few styles given more presence: the
+ * alarm-list clock time gets weight so it anchors each card, and title styles
+ * firm up slightly so section headers read as structure, not just text.
+ */
+private val SunriseTypography = Typography().let { base ->
+    base.copy(
+        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.SemiBold),
+        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        titleMedium = base.titleMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.2.sp
+        ),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+    )
+}
+
 @Composable
 fun WorstAlarmTheme(content: @Composable () -> Unit) {
     val scheme = if (isSystemInDarkTheme()) SunriseDark else SunriseLight
-    MaterialTheme(colorScheme = scheme, content = content)
+    MaterialTheme(
+        colorScheme = scheme,
+        shapes = SunriseShapes,
+        typography = SunriseTypography,
+        content = content
+    )
 }

@@ -1,8 +1,8 @@
 package com.worstalarm.clock.ui.alarmlist
 
-import android.content.Context
 import android.provider.Settings as SystemSettings
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,12 +53,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.worstalarm.clock.data.dao.AlarmWithSteps
 import com.worstalarm.clock.ui.AppViewModel
+import com.worstalarm.clock.ui.components.DaySummaryFormatter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -172,19 +175,27 @@ fun AlarmListScreen(
                     Spacer(Modifier.height(12.dp))
                 }
                 if (alarms.isEmpty()) {
-                    Text(
-                        "No alarms yet. Tap + to set your first routine.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // Friendly sunrise empty state instead of a bare caption.
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("☀️", fontSize = 44.sp)
+                            Spacer(Modifier.height(12.dp))
+                            Text("No alarms yet", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Tap + to build your first wake-up routine.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 } else {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         items(items = alarms, key = { it.alarm.id }) { a ->
                             AlarmRow(
                                 alarm = a,
-                                context = context,
                                 onClick = { onEdit(a.alarm.id) },
                                 onToggle = { on -> vm.setEnabled(a.alarm, on) }
                             )
@@ -245,46 +256,56 @@ private fun OverlayPermissionCard(onRequest: () -> Unit) {
     }
 }
 
+/**
+ * v0.4 redesign: the whole card is tappable (no separate "Edit" button), the
+ * time anchors the card at display size, and a single quiet summary line
+ * ("Weekdays · 3 locations") replaces the old stack of captions. Disabled
+ * alarms dim their content so the list reads at a glance.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlarmRow(
     alarm: AlarmWithSteps,
-    context: Context,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    val enabled = alarm.alarm.enabled
+    val contentAlpha = if (enabled) 1f else 0.45f
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surface
+        )
+    ) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "%02d:%02d".format(alarm.alarm.hour, alarm.alarm.minute),
-                    style = MaterialTheme.typography.headlineMedium
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
-                if (alarm.alarm.label.isNotBlank()) Text(alarm.alarm.label)
+                if (alarm.alarm.label.isNotBlank()) {
+                    Text(
+                        alarm.alarm.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                val locations = alarm.orderedSteps.size
                 Text(
-                    formatDays(alarm.alarm.daysMask),
+                    DaySummaryFormatter.format(alarm.alarm.daysMask) +
+                        " · $locations location" + (if (locations == 1) "" else "s"),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "${alarm.orderedSteps.size} location" +
-                        if (alarm.orderedSteps.size == 1) "" else "s",
-                    style = MaterialTheme.typography.bodySmall
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
             }
-            Switch(checked = alarm.alarm.enabled, onCheckedChange = onToggle)
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-            OutlinedButton(onClick = onClick) { Text("Edit") }
+            Switch(checked = enabled, onCheckedChange = onToggle)
         }
     }
-}
-
-private fun formatDays(mask: Int): String {
-    if (mask == 0) return "One-time"
-    val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-    return days.withIndex().filter { (i, _) -> (mask shr i) and 1 == 1 }
-        .joinToString(" ") { it.value }
 }
