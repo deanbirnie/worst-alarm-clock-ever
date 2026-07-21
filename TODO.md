@@ -177,6 +177,29 @@ things only when they're verified working.
       validation, awake-check policy, camera guard) all still pass — the redesign
       touched no alarm behavior.
 
+## Phase 2.9 — Direct Boot: fire before first unlock (v0.4.1)
+
+- [x] Alarms now fire in Android's **Direct Boot** window — after a reboot (e.g. an
+      overnight OS auto-update) but before the user's first unlock. Previously the
+      boot receiver couldn't read the alarm DB until unlock, so an early-morning alarm
+      set before an overnight update would silently never ring.
+- [x] Room DB moved to **device-protected storage** (`createDeviceProtectedStorageContext`)
+      with a one-time `moveDatabaseFrom` migration so existing users keep their alarms.
+      Same for the settings DataStore (best-effort file copy). Trade-off accepted with the
+      user: device-key encryption at rest instead of credential-key (alarm times / barcode
+      values, not secrets — the AOSP Clock approach).
+- [x] `BootReceiver`, `AlarmReceiver`, `AlarmService`, `AlarmActivity`, `OverlayService`,
+      `AwakeCheckActivity` marked `android:directBootAware="true"`; boot receiver already
+      listened for `LOCKED_BOOT_COMPLETED`.
+- [x] Scope confirmed with the user: the guaranteed win is that the alarm **fires**
+      (rings/vibrates/lights the screen); scanning to disarm can require the user to unlock,
+      which is fine. Custom tones in locked media storage fall back to the system alarm tone
+      pre-unlock (existing fallback chain in `AlarmService.startAudioAndVibration`).
+- [ ] **Needs on-device verification** (not testable in the JVM/CI sandbox): set an alarm,
+      reboot, and confirm it fires while still on the lock screen without unlocking; verify
+      the DB migration preserves alarms across the upgrade; confirm sound falls back
+      gracefully pre-unlock. Track alongside the other device checks in BUGS.md.
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit

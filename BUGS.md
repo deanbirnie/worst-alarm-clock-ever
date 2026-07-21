@@ -200,6 +200,13 @@ Composable. Anything needing an Android runtime is currently unverified.
   Robolectric path (JVM, keeps CI fast). Recommend Robolectric for the Room/DAO
   and migration coverage (C3) so it stays in the existing fast lane.
 
+### Device-only behaviours to verify (no JVM coverage possible)
+- **Direct Boot (v0.4.1):** alarm fires on the lock screen after a reboot without a
+  first unlock; the `moveDatabaseFrom` migration preserves existing alarms on upgrade;
+  pre-unlock sound falls back to the system alarm tone when a custom tone is unreadable.
+  Reproduce with: set an alarm a few minutes out → reboot → don't unlock.
+- B7 (redundant exact-alarm permissions) and B8 (mediaPlayback FGS type) from above.
+
 ### Cheapest high-value next steps
 1. **C2** (scheduler DST) — pure, highest safety value, no new infra.
 2. **C5 + B1** (foreground-start decision) — tiny extract, kills a real stuck-state bug.

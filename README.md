@@ -52,8 +52,11 @@ in the persistent notification.
 - **Maximum volume, locked** — alarm plays on the alarm audio stream at max
   volume with a vibration pattern; the volume/mute buttons are swallowed
   while the alarm is active, so it can't be quieted without disarming it.
-- **Survives reboots** — enabled alarms are rescheduled after boot and app
-  updates.
+- **Survives reboots — including before you unlock.** Enabled alarms are
+  rescheduled after a restart or app update, and the alarm engine runs in
+  Android's **Direct Boot** mode: an alarm set for the early hours still fires
+  after an overnight OS update reboots the phone, even though you haven't
+  unlocked it yet. (You unlock as normal to scan and disarm.)
 - **Doze-proof scheduling** — uses `AlarmManager.setAlarmClock`, the
   strongest alarm the OS offers; it fires exactly on time without needing
   battery-optimization exemptions.
@@ -178,7 +181,7 @@ theme).
 | Camera | Scanning barcodes | First launch (and again at scan time if denied) |
 | Notifications (Android 13+) | The foreground service's persistent notification + full-screen alarm intent | First launch |
 | Display over other apps | The re-assert overlay that blocks escaping the alarm | Banner on the home screen (optional but recommended) |
-| Exact alarms / boot / vibrate / wake lock | Core alarm behavior | Install time (no prompt; `setAlarmClock` needs no special exemption) |
+| Exact alarms / boot / vibrate / wake lock | Core alarm behavior (boot receiver + engine run in Direct Boot so alarms fire before first unlock) | Install time (no prompt; `setAlarmClock` needs no special exemption) |
 
 ## Honest limitations
 
@@ -189,7 +192,13 @@ theme).
   lock-screen takeover makes cheating *inconvenient*, which is the point:
   at 6 AM, walking to the kitchen is easier than fighting the phone.
 - **Don't force-stop the app.** A force-stopped app's alarms won't fire until
-  it's opened again. Normal swipes from recents are fine.
+  it's opened again — Android withholds boot/alarm broadcasts from a
+  force-stopped app, so this is the one reboot case Direct Boot can't rescue.
+  Normal swipes from recents are fine.
+- **Locked-boot sound falls back to the system alarm tone.** During Direct
+  Boot (before first unlock) a *custom* alarm tone that lives in your locked
+  media storage may not be readable yet, so the alarm rings with the system
+  default alarm sound instead. It still rings, vibrates, and lights the screen.
 - **Volume lock has a boundary.** The physical/software volume keys are
   blocked while the alarm screen has focus, and `AlarmService` re-forces max
   volume at the start of every ring regardless. But it only guards this

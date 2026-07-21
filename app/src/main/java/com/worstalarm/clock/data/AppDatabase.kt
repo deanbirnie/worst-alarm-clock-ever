@@ -66,15 +66,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private const val DB_NAME = "worst-alarm.db"
+
+        /**
+         * The database lives in **device-protected storage** so the alarm engine can read
+         * it during Direct Boot — the window after a reboot (e.g. an overnight OS update)
+         * but before the user has unlocked the phone for the first time. Credential-protected
+         * storage (Room's default location) is sealed until that first unlock, which for an
+         * alarm people set for the early hours would mean the alarm silently never fires.
+         *
+         * Trade-off: device-protected storage is encrypted with a device key rather than one
+         * derived from the user's lock-screen credential. Acceptable here — the contents are
+         * alarm times, weekday masks, and barcode values, not secrets — and it's the same
+         * approach AOSP's own Clock uses so alarms survive a locked reboot.
+         */
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(
-                context.applicationContext,
-                AppDatabase::class.java,
-                "worst-alarm.db"
-            )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-                .build()
-                .also { instance = it }
+            instance ?: run {
+                val appContext = context.applicationContext
+                val deviceContext = appContext.createDeviceProtectedStorageContext()
+                // One-time migration for users upgrading from a build that kept the DB in
+                // credential storage: move the existing file (and its -wal/-shm) across so
+                // no alarms are lost. No-op on fresh installs or once already moved. Wrapped
+                // defensively — this realistically runs on the first (unlocked) app open, but
+                // a failure here must never crash the boot/alarm re-arm path.
+                runCatching { deviceContext.moveDatabaseFrom(appContext, DB_NAME) }
+                Room.databaseBuilder(deviceContext, AppDatabase::class.java, DB_NAME)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .build()
+                    .also { instance = it }
+            }
         }
     }
 }
