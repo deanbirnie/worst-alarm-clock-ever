@@ -5,7 +5,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +38,6 @@ import com.worstalarm.clock.BuildConfig
 
 private const val DEVELOPER_NAME = "Birnie Labs"
 private const val DEVELOPER_EMAIL = "worstalarm@birnielabs.co.za"
-private const val SOURCE_URL = "https://github.com/deanbirnie/worst-alarm-clock-ever"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,21 +107,9 @@ fun AboutScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {
-                            sendEmail("Worst Alarm Clock Ever — hello")
-                        }) { Text("Contact") }
-                        OutlinedButton(onClick = {
-                            try {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(SOURCE_URL))
-                                )
-                            } catch (_: Throwable) {
-                                Toast.makeText(context, "No browser found.", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        }) { Text("Source code") }
-                    }
+                    OutlinedButton(onClick = {
+                        sendEmail("Worst Alarm Clock Ever — hello")
+                    }) { Text("Contact") }
                 }
             }
 
