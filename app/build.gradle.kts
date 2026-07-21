@@ -12,9 +12,26 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.4.1"
+        versionCode = 15
+        versionName = "0.4.2"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        // Pin the debug key so every build — local AND CI — signs with the SAME
+        // signature. Without this, AGP auto-generates a throwaway debug keystore on
+        // each fresh CI runner, so consecutive downloaded APKs have mismatched
+        // signatures and Android refuses to install one over another
+        // (INSTALL_FAILED_UPDATE_INCOMPATIBLE) — forcing an uninstall every update.
+        // The committed debug.keystore uses Android's well-known default debug
+        // credentials; it is NOT secret and cannot sign Play releases. Real release
+        // signing (Play App Signing) is set up at the V1 Play submission — see RELEASING.md.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -27,6 +44,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

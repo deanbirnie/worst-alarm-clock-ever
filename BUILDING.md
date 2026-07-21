@@ -27,6 +27,12 @@ Notes:
 - This is the *debug* build: fully functional, signed with a debug key, ideal
   for personal use. For a Play-Store-ready release build see
   [RELEASING.md](RELEASING.md).
+- **Updates install over each other** because every build (local and CI) is
+  signed with the repo's committed debug keystore (`app/debug.keystore`), so
+  the signature is identical each time. That keystore uses Android's well-known
+  default debug credentials — it is intentionally *not* secret and cannot sign
+  a Play release. Proper release signing (Play App Signing) is a V1 task; see
+  [RELEASING.md](RELEASING.md).
 
 ---
 
@@ -136,5 +142,5 @@ future, lock the phone, and see for yourself.
 | `Unsupported class file major version` / JDK errors | You're on the wrong JDK. Use 17: `export JAVA_HOME=…` |
 | Gradle sync fails on license | `yes \| sdkmanager --licenses` |
 | First build is very slow | Normal — Gradle downloads ~1 GB of dependencies once, then caches |
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` on `adb install` | The phone has a build signed with a different key; uninstall the app first |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` / "App not installed" on update | Should no longer happen: all builds now sign with the committed debug keystore (same signature every time), so updates install over each other. **One-time exception:** the first build after this change (0.4.2+) won't install over an *older* build that was signed with a throwaway key — uninstall once, then future updates install cleanly. |
 | Alarm doesn't ring on time on a Xiaomi/Oppo | Exempt the app from battery optimization; enable "autostart" if the OEM has it |

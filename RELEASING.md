@@ -7,10 +7,19 @@ Store", and how to keep the project healthy over the years in between.
 
 ## 1. Release signing
 
-Debug builds are signed with a throwaway debug key. Anything you distribute —
-and *everything* you upload to Google Play — must be signed with a release key
-you own and keep forever. **Losing the keystore means losing the ability to
-update the app**, so treat it like a password vault item.
+> **Not to be confused with the debug keystore.** As of 0.4.2 the repo commits
+> `app/debug.keystore` and signs *debug* builds with it, purely so sideloaded
+> debug APKs install as updates over one another (same signature every build).
+> That debug key uses Android's public default credentials, is **not** secret,
+> and must **never** be used for a Play release. The release keystore below is a
+> different, genuinely secret key — never commit it.
+
+Debug builds are signed with the committed debug key (above). Anything you
+distribute publicly — and *everything* you upload to Google Play — must be
+signed with a release key you own and keep forever. **Losing the keystore means
+losing the ability to update the app**, so treat it like a password vault item.
+(Google **Play App Signing**, step 3 below, is the modern safety net for exactly
+this — Google holds the app signing key and you sign uploads with an upload key.)
 
 ### Create the keystore (once)
 
