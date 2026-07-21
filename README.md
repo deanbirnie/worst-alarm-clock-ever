@@ -41,6 +41,9 @@ in the persistent notification.
   quiet periods between rings.
 - **Recurring or one-shot alarms** — pick any subset of weekdays; with no days
   selected the alarm fires once and disables itself.
+- **"Rings in …" note on save** — saving an enabled alarm shows a little note
+  with the time remaining until it rings ("Rings in 7 h 32 min"), computed from
+  the exact same schedule handed to the OS, so it can't lie.
 - **Full lock-screen takeover** — the alarm UI appears over the keyguard,
   turns the screen on, and ignores the back button.
 - **Re-assert overlay** — if you escape to the home screen while the alarm is

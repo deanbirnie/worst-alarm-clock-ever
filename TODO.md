@@ -137,6 +137,18 @@ things only when they're verified working.
     on a miss re-ring, and that scanning it correctly disarms via `ScanValidator`), and
     `AlarmEntityTest` (the toggle defaults on).
 
+## Phase 2.7 — Save-time next-ring note (v0.3.2)
+
+- [x] After saving an alarm, a little note (Toast) shows how long until it rings:
+      "Rings in 7 h 32 min". The wording comes from `NextRingFormatter`, a pure JVM
+      object that delegates the WHEN to `AlarmScheduler.computeNextTriggerMs` — the
+      same computation that arms AlarmManager — so the note can never disagree with
+      the actual schedule. Minutes round UP (an alarm 61 s out says "2 min") so the
+      note never promises less time than the user really has; past a day, minutes are
+      dropped as noise ("Rings in 2 days 3 h"). Saving a disabled alarm shows no note.
+      Unit-tested in `NextRingFormatterTest` (delta formatting + end-to-end with a
+      fixed clock: later-today, rolled-to-tomorrow, recurring-weekday, disabled).
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 - [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)
@@ -146,7 +158,8 @@ things only when they're verified working.
 - [ ] Custom app icon (current one is a placeholder vector)
 - [ ] Custom alarm sound picker (currently always the system default alarm tone)
 - [ ] Gradually increasing volume option (start quiet, ramp to max)
-- [ ] Show next-fire time ("Rings in 7 h 32 min") on the alarm list
+- [ ] Show next-fire time ("Rings in 7 h 32 min") on the alarm list (the save-time
+      note exists as of 0.3.2 — `NextRingFormatter` is ready to reuse here)
 - [ ] Handle timezone/DST changes while an alarm is armed (`ACTION_TIMEZONE_CHANGED` receiver)
 - [ ] In-app help page for OEM battery killers (Xiaomi/Oppo/Samsung instructions, dontkillmyapp.com links)
 - [ ] Battery-optimization exemption prompt (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
