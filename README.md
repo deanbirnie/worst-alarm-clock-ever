@@ -93,6 +93,7 @@ in the persistent notification.
 | [RELEASING.md](RELEASING.md) | Signing, versioning, long-term maintenance, and the full Google Play publishing path. |
 | [DESIGN.md](DESIGN.md) | Exact colors, typography, spacing, and screen-by-screen layout of the current UI. |
 | [TODO.md](TODO.md) | Project task list — what's done and what's next. |
+| [BUGS.md](BUGS.md) | Known-bug backlog and test-coverage audit (found by code review, fix later). |
 
 ## The user interface
 

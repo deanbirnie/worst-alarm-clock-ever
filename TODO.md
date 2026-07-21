@@ -179,9 +179,16 @@ things only when they're verified working.
 
 ## Phase 3 — Hardening (before giving it to anyone else)
 
-- [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge)
-- [ ] Unit tests for the `AlarmService` ring/scan/disarm state machine
-- [ ] Compose UI smoke test: create alarm → shows in list → toggle works
+> See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit
+> (v0.4.0). The three items below are tracked there in more detail (C2, C7, C8),
+> alongside 9 potential bugs (B1–B9) found reading the whole repo.
+
+- [ ] Fix B1 (foreground service can get stuck after a sticky restart) — see BUGS.md
+- [ ] Fix B2 (two alarms at the same minute: second clobbers the first) — see BUGS.md
+- [ ] Add Robolectric/instrumented infra so Room + service + Compose can be tested at all (BUGS.md C3/C7/C8)
+- [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge) — BUGS.md C2
+- [ ] Unit tests for the `AlarmService` ring/scan/disarm state machine — BUGS.md C7
+- [ ] Compose UI smoke test: create alarm → shows in list → toggle works — BUGS.md C8
 - [ ] Enable Room `exportSchema` + committed schema JSON, adopt real migrations (required before first public release)
 - [ ] Custom app icon (current one is a placeholder vector)
 - [ ] Custom alarm sound picker (currently always the system default alarm tone)
