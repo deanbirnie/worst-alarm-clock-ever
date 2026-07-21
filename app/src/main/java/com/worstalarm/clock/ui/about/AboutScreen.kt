@@ -37,8 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.worstalarm.clock.BuildConfig
 
-private const val DEVELOPER_NAME = "Dean Birnie"
-private const val DEVELOPER_EMAIL = "deanicdl@gmail.com"
+private const val DEVELOPER_NAME = "Birnie Labs"
+private const val DEVELOPER_EMAIL = "worstalarm@birnielabs.co.za"
 private const val SOURCE_URL = "https://github.com/deanbirnie/worst-alarm-clock-ever"
 
 @OptIn(ExperimentalMaterial3Api::class)
