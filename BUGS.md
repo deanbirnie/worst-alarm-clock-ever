@@ -17,8 +17,8 @@ JVM-only, see the coverage section).
 
 ## Bugs
 
-### B1 — Foreground service can get stuck after a sticky restart · High · Confirmed
-- **Where:** `AlarmService.onStartCommand` (`app/src/main/java/com/worstalarm/clock/alarm/AlarmService.kt:51-76`)
+### B1 — Foreground service can get stuck after a sticky restart · High · Confirmed · ✅ Fixed in 0.4.3
+- **Where:** `AlarmService.onStartCommand` (`app/src/main/java/com/worstalarm/clock/alarm/AlarmService.kt`)
 - **What:** `onStartCommand` always calls `startForeground(...)` first, then
   dispatches on `when (intent?.action)` with **no `else` branch**, and returns
   `START_STICKY`. If the OS kills and restarts the service it re-delivers a
@@ -28,14 +28,17 @@ JVM-only, see the coverage section).
   forever — with no alarm actually active.
 - **Why:** `START_STICKY` + unconditional `startForeground` + no null/default
   handling.
-- **Proposed fix:** Return `START_NOT_STICKY` (the real triggers are AlarmManager
-  broadcasts, which recreate the service anyway), **and** add an `else`/null
-  branch that calls `stopSelfSafely()` so a stray start can't strand a foreground
-  notification. Also handle the case where `AlarmSession`/`AwakeCheckSession` are
-  both inactive on entry.
-- **How to test:** Extract the "should this start keep us foregrounded?" decision
-  into a pure function (`intent?.action` + session-active flags → keep/stop) and
-  unit-test it, including the null-intent case. Instrumented test optional.
+- **Fix (0.4.3):** `onStartCommand` now returns `START_NOT_STICKY` (the paths that
+  must outlive process death — step-rings and awake checks — re-arm themselves via
+  AlarmManager, per `onDestroy`, so nothing relies on an OS restart with a null
+  intent). A new pure `ServiceStartPolicy.decide(action)` gates the dispatch: a
+  null/unrecognised action foregrounds briefly (required within ~5s) then calls
+  `stopSelfSafely()`. A defensive `else -> stopSelfSafely()` was also added to the
+  `when` as a second layer. Verified by `ServiceStartPolicyTest`.
+- **How it was tested:** `ServiceStartPolicyTest` (pure JVM) pins null → STOP,
+  unknown action → STOP, and every real action → PROCEED, plus a guard asserting
+  the handled-action set matches the service's `ACTION_*` constants. Full
+  end-to-end (actual sticky-restart) remains device/instrumented-only.
 
 ### B2 — Two alarms at the same minute: the second silently clobbers the first · High · Confirmed
 - **Where:** `AlarmService.handleRing` (`AlarmService.kt:78-101`) + `AlarmSession.start`

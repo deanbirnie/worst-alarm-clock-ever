@@ -49,6 +49,8 @@ class AlarmService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Android requires startForeground() within ~5s of startForegroundService(), so we
+        // foreground first — even for a start we're about to reject just below.
         val notification = buildNotification("Alarm", "Waking you up…")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -58,6 +60,15 @@ class AlarmService : Service() {
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+
+        // B1: a start with no action we handle — a null intent (there's no sticky restart to
+        // deliver one now, but defence in depth) or an unrecognised action — must not leave us
+        // sitting in the foreground with no alarm active. ServiceStartPolicy is the unit-tested
+        // source of truth for which actions are real.
+        if (ServiceStartPolicy.decide(intent?.action) == ServiceStartPolicy.Decision.STOP) {
+            stopSelfSafely()
+            return START_NOT_STICKY
         }
 
         when (intent?.action) {
@@ -71,8 +82,14 @@ class AlarmService : Service() {
             ACTION_AWAKE_CHECK_SHOW -> handleAwakeCheckShow(intent)
             ACTION_AWAKE_CHECK_DISMISS -> handleAwakeCheckDismiss(intent.getLongExtra(EXTRA_ALARM_ID, -1L))
             ACTION_AWAKE_CHECK_TIMEOUT -> handleAwakeCheckTimeout(intent)
+            // Unreachable past the policy gate above, but staying foregrounded on an unmatched
+            // action is the exact B1 failure mode, so stop rather than risk it.
+            else -> stopSelfSafely()
         }
-        return START_STICKY
+        // START_NOT_STICKY: everything that must outlive process death re-arms itself through
+        // AlarmManager (step-rings, awake checks — see onDestroy), so we never depend on the OS
+        // restarting us with a null intent, which is what used to strand this service (B1).
+        return START_NOT_STICKY
     }
 
     private fun handleRing(alarmId: Long) {
