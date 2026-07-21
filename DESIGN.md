@@ -254,7 +254,9 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
 
 - `TopAppBar`: title "New alarm" or "Edit alarm"; back arrow nav icon;
   right-side action = `TextButton` "Save" (disabled until at least one
-  step has a barcode chosen).
+  step has a barcode chosen). Tapping Save (with the alarm enabled) shows
+  a long `Toast` with the countdown to the next ring — "Rings in 7 h
+  32 min" — then navigates back; saving a disabled alarm shows no note.
 - Scrollable `Column`, 16dp screen padding, 12dp vertical gaps between
   top-level items:
   1. `OutlinedTextField` — "Label (optional)".

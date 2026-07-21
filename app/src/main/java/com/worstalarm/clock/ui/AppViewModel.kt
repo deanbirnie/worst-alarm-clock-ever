@@ -60,10 +60,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // The saved entity is passed to the callback so the UI can show the "Rings in …"
+    // note (NextRingFormatter) for exactly what was persisted and scheduled.
     fun saveAlarm(
         alarm: AlarmEntity,
         steps: List<RoutineStepEntity>,
-        onSaved: () -> Unit = {}
+        onSaved: (AlarmEntity) -> Unit = {}
     ) {
         viewModelScope.launch {
             val saved = withContext(Dispatchers.IO) {
@@ -72,7 +74,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (saved.enabled) AlarmScheduler.schedule(appContext, saved)
             else AlarmScheduler.cancel(appContext, saved.id)
-            onSaved()
+            onSaved(saved)
         }
     }
 

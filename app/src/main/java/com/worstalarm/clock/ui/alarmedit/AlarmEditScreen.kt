@@ -1,6 +1,7 @@
 package com.worstalarm.clock.ui.alarmedit
 
 import android.app.TimePickerDialog
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worstalarm.clock.alarm.NextRingFormatter
 import com.worstalarm.clock.data.entity.AlarmEntity
 import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.data.entity.RoutineStepEntity
@@ -177,7 +179,14 @@ fun AlarmEditScreen(
                                     timeToNextRingSeconds = s.timeToNextSeconds
                                 )
                             }
-                            vm.saveAlarm(alarm, entities) { onDone() }
+                            vm.saveAlarm(alarm, entities) { saved ->
+                                // Little confirmation note: how long until this alarm
+                                // actually rings. Null when saved disabled — no note then.
+                                NextRingFormatter.format(saved)?.let { note ->
+                                    Toast.makeText(context, note, Toast.LENGTH_LONG).show()
+                                }
+                                onDone()
+                            }
                         }
                     ) { Text("Save") }
                 }
