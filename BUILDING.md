@@ -124,9 +124,13 @@ On first launch, grant what the app asks for — each one has a job:
    fires; you don't want to meet a permission dialog at 6 AM.
 2. **Notifications** (Android 13+) — the alarm's foreground service and its
    full-screen wake-up.
-3. **Display over other apps** — tap the banner on the home screen; this
+3. **Full-screen alarms** (Android 14+) — tap the "Allow full-screen alarms"
+   banner on the alarm list. Without it the alarm can ring while the screen
+   stays dark and you'd have to open the app by hand. (Below Android 14 this is
+   granted automatically — no banner appears.)
+4. **Display over other apps** — tap the banner on the home screen; this
    powers the overlay that stops you from just using the phone mid-alarm.
-4. Recommended on aggressive OEMs (Xiaomi/Oppo/etc.): Settings → Battery →
+5. Recommended on aggressive OEMs (Xiaomi/Oppo/etc.): Settings → Battery →
    exempt *Worst Alarm* from optimization so nothing delays the alarm.
 
 Then: add a barcode or two to the library, create an alarm ~2 minutes in the

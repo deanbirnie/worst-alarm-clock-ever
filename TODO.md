@@ -99,6 +99,10 @@ things only when they're verified working.
 
 ## Phase 2.6 — Awake check (v0.3.0, requested 2026-07-17)
 
+> **Revised in Phase 2.10 (v0.4.4):** the popup is no longer *silent* and the dismiss
+> window is no longer 90s — it now emits a gentle repeating cue (soft chime + light buzz)
+> over a ~3-minute window, so you don't have to watch the screen. The rest below stands.
+
 - [x] "Are you awake?" check after the routine's final scan: the screen blocker (AlarmActivity)
       is removed the instant the final barcode is scanned, but the alarm isn't fully off yet.
       Twice — each at a random point 5-15 minutes after the previous one resolves — a silent,
@@ -200,13 +204,56 @@ things only when they're verified working.
       the DB migration preserves alarms across the upgrade; confirm sound falls back
       gracefully pre-unlock. Track alongside the other device checks in BUGS.md.
 
+## Phase 2.10 — Awake-check gentle nudge (v0.4.4, requested 2026-07-22)
+
+- [x] Fix: the awake-check popup was fully **silent**, so the only way not to miss its
+      90-second window was to watch the phone for the whole 5-15 min wait. Now, while a
+      popup is showing, the service emits a **gentle, non-alarm cue** — a soft
+      notification-level chime + a light double-tap buzz — that **repeats every 30s** across
+      an extended **~3-minute** ack window, so you notice it without watching and can just
+      tap "I'm awake". Deliberately capped: low volume, short, non-looping — it never
+      escalates into an alarm that would re-wake you. Vibration is the reliable channel; the
+      chime is a bonus a silent profile / DND may mute.
+  - `AwakeCheckPolicy`: `POPUP_TIMEOUT_MS` 90s → 3 min; new `NUDGE_INTERVAL_MS` (30s) and a
+    pure `nudgeOffsetsMs()` (0, 30s, 60s … always inside the window) so the "repeats a few
+    times, never past the deadline" contract is unit-testable. `AwakeCheckPolicyTest` extended.
+  - `AlarmService`: `handleAwakeCheckShow` now keeps the foreground service alive to run a
+    best-effort nudge loop (`startAwakeCheckNudges`/`playAwakeCheckNudge`/`stopAwakeCheckNudges`,
+    a separate `nudgePlayer` from the alarm's `player`) instead of stopping immediately; the
+    AlarmManager miss-timeout stays authoritative, so a killed process still re-rings on a miss
+    (no reliability regression). Nudges stop on dismiss, on timeout, and in `onDestroy`.
+  - Copy/docs updated (alarm-editor toggle blurb, README, DESIGN 9.4, in-code comments) to
+    drop "silent"/"90s" and describe the gentle cue.
+  - **Needs on-device confirmation** (JVM/CI can't exercise audio/haptics): the cue is
+    audible-but-gentle, the buzz fires, and it stops promptly on "I'm awake".
+
+## Phase 2.11 — Full-screen alarm reliability (v0.4.4, reported 2026-07-22)
+
+- [x] Fix: the alarm could **ring with no screen** — the foreground service played audio but the
+      full-screen UI never appeared, so the user had to unlock and open the app by hand. Root
+      cause: the manifest never declared **`USE_FULL_SCREEN_INTENT`**, so `setFullScreenIntent(...)`
+      on the alarm notification was silently ignored on Android 10+ (the direct `startActivity`
+      from the receiver is background-blocked on modern Android, so both launch paths failed).
+  - Declared `USE_FULL_SCREEN_INTENT`. Auto-granted to alarm apps (we already declare
+    `USE_EXACT_ALARM`); on **Android 14+** it can require an explicit user grant, so the alarm
+    list shows a **"Allow full-screen alarms" card** (mirrors the overlay-permission card,
+    re-checked on resume) that deep-links to `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` when
+    `NotificationManager.canUseFullScreenIntent()` is false.
+  - The foreground notification's full-screen intent is now **targeted by action**: the
+    awake-check popup (`AwakeCheckActivity`) for an awake-check show, the ringing lockdown
+    (`AlarmActivity`) for everything else — so enabling the permission can't wrongly launch the
+    full alarm lockdown during an awake check, and both events now surface reliably from a cold,
+    locked screen.
+  - **Needs on-device confirmation** (JVM/CI can't exercise this): set an alarm, lock/sleep the
+    phone, and confirm the ringing screen appears over the lock screen without opening the app.
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit
 > (v0.4.0). The three items below are tracked there in more detail (C2, C7, C8),
 > alongside 9 potential bugs (B1–B9) found reading the whole repo.
 
-- [ ] Fix B1 (foreground service can get stuck after a sticky restart) — see BUGS.md
+- [x] Fix B1 (foreground service can get stuck after a sticky restart) — see BUGS.md (0.4.3)
 - [ ] Fix B2 (two alarms at the same minute: second clobbers the first) — see BUGS.md
 - [ ] Add Robolectric/instrumented infra so Room + service + Compose can be tested at all (BUGS.md C3/C7/C8)
 - [ ] Unit tests for `AlarmScheduler.computeNextTriggerMs` (weekday masks, DST, exact-minute edge) — BUGS.md C2

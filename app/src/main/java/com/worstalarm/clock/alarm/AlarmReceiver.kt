@@ -24,9 +24,9 @@ class AlarmReceiver : BroadcastReceiver() {
         }
         ContextCompat.startForegroundService(context, serviceIntent)
 
-        // The silent awake-check popup is a lightweight, non-lockdown screen; every other
-        // AlarmManager-driven event (including a missed awake check, which rings the alarm
-        // again) shows the full ringing lockdown screen.
+        // The awake-check popup is a lightweight, non-lockdown screen (the service nudges it
+        // gently while it's up); every other AlarmManager-driven event (including a missed awake
+        // check, which rings the alarm again) shows the full ringing lockdown screen.
         val activityClass = if (action == AlarmScheduler.ACTION_AWAKE_CHECK)
             AwakeCheckActivity::class.java else AlarmActivity::class.java
 

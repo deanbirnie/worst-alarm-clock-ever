@@ -243,11 +243,17 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
 - `FloatingActionButton` bottom-right: `Add` icon, standard M3 FAB
   (primaryContainer-colored, 16dp corners).
 - Body, top to bottom, 16dp screen padding:
-  1. **Overlay-permission banner** (conditional — only shown if "Display
+  1. **Full-screen-alarm banner** (conditional — Android 14+ only, shown if
+     `NotificationManager.canUseFullScreenIntent()` is false): a `Card`, bold
+     title "Allow full-screen alarms", a `bodySmall` explanation, an 8dp
+     spacer, and an `OutlinedButton` "Open settings" that deep-links to the
+     per-app full-screen-intent setting. Shown first because without it the
+     alarm can ring with no visible screen.
+  2. **Overlay-permission banner** (conditional — only shown if "Display
      over other apps" isn't granted): a `Card` containing bold title
      "Grant 'Display over other apps'", a `bodySmall` explanation line, an
      8dp spacer, and an `OutlinedButton` "Open settings".
-  2. **Empty state** (if no alarms): centered in the remaining space — a
+  3. **Empty state** (if no alarms): centered in the remaining space — a
      ☀️ glyph at 44sp, 12dp gap, "No alarms yet" in `titleMedium`, 4dp gap,
      "Tap + to build your first wake-up routine." in `onSurfaceVariant`.
   3. **Alarm list** (if alarms exist): a `LazyColumn`, 12dp vertical gaps
@@ -314,8 +320,9 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
   5. A `Card` (12dp inner padding) containing the **awake-check toggle
      row**: a `Row`, center-aligned, with a `Column` (`weight(1f)`) holding
      title "Awake check" (`titleSmall`) and a `bodySmall` explanatory line
-     ("After the final scan, two silent popups (5-15 min apart) must be
-     dismissed before the alarm is fully off. Miss one and it rings
+     ("After the final scan, two popups (5-15 min apart) must be dismissed
+     before the alarm is fully off. Each nudges you gently (a soft chime and
+     buzz, not the alarm) until you tap it. Miss one and the alarm rings
      again."), plus a trailing `Switch` — on by default for new alarms.
   6. Section header "Routine locations (in order)" (`titleMedium`) plus a
      `bodySmall` explanatory line underneath.
@@ -524,6 +531,15 @@ appears twice, at random points after the routine's final scan, to confirm
 the user hasn't drifted back to sleep. Visually it's the same warm
 background/typography language as the ringing screens, but it is **not** a
 lockdown: no back-button interception, no re-assert overlay.
+
+While the popup is up, the service emits a **gentle cue** — a soft
+notification-level chime plus a light double-tap buzz — repeating every
+`AwakeCheckPolicy.NUDGE_INTERVAL_MS` (30s) across the `POPUP_TIMEOUT_MS`
+(~3 min) ack window, so the user notices it without having to watch the
+screen. It is deliberately *not* alarm-grade (low volume, short,
+non-looping, capped — vibration is the reliable channel, the chime a bonus a
+silent profile may mute); the whole point is to acknowledge, not to re-wake.
+The cue stops the instant "I'm awake" is tapped or the miss-timeout re-rings.
 
 Full-height `Column`, `SpaceBetween` arrangement, `systemBarsPadding`, 24dp
 padding, everything centered horizontally:

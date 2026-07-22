@@ -5,10 +5,12 @@ import kotlin.random.Random
 /**
  * Pure decision logic for the post-routine "are you still awake?" checks.
  *
- * After the final routine step is scanned, two silent popups must be dismissed — each
- * appearing at a random point 5-15 minutes after the previous one is resolved — before
- * the alarm is considered fully off. Missing either one (an 90s dismiss deadline expires)
- * is a full reset: both checks must be earned again, from a fresh re-ring.
+ * After the final routine step is scanned, two popups must be dismissed — each appearing at a
+ * random point 5-15 minutes after the previous one is resolved — before the alarm is considered
+ * fully off. While a popup is showing, a *gentle* cue (a soft chime + light buzz, never
+ * alarm-grade) repeats every [NUDGE_INTERVAL_MS] so the user notices without having to watch the
+ * screen. Missing a popup (its [POPUP_TIMEOUT_MS] dismiss deadline expires) is a full reset: both
+ * checks must be earned again, from a fresh re-ring.
  *
  * Kept free of Android types so plain JVM unit tests can pin the behavior down, mirroring
  * how [ScanValidator] isolates the routine's scan-decision logic.
@@ -21,12 +23,31 @@ object AwakeCheckPolicy {
     const val MIN_INTERVAL_MS = 5 * 60_000L
     const val MAX_INTERVAL_MS = 15 * 60_000L
 
-    /** How long a shown popup waits for a tap before it counts as missed. */
-    const val POPUP_TIMEOUT_MS = 90_000L
+    /**
+     * How long a shown popup waits for the "I'm awake" tap before it counts as missed. The
+     * gentle cue repeats across this whole window (see [nudgeOffsetsMs]), so it's long enough to
+     * notice and respond to while up and moving, yet short enough that you can't meaningfully
+     * have drifted back to sleep.
+     */
+    const val POPUP_TIMEOUT_MS = 3 * 60_000L
+
+    /** Spacing between the gentle "still awake?" nudges within the [POPUP_TIMEOUT_MS] window. */
+    const val NUDGE_INTERVAL_MS = 30_000L
 
     /** A random point 5-15 minutes out, inclusive, for when the next popup should appear. */
     fun randomIntervalMs(random: Random = Random.Default): Long =
         random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS + 1)
+
+    /**
+     * Offsets from popup-show at which a gentle nudge fires: the first at 0 (immediately on
+     * show), then one every [NUDGE_INTERVAL_MS] until the ack window closes — never at or past
+     * the deadline. Pure so the "repeats a few times, always within the window" contract is
+     * unit-testable independently of the service's live loop.
+     */
+    fun nudgeOffsetsMs(): List<Long> =
+        generateSequence(0L) { it + NUDGE_INTERVAL_MS }
+            .takeWhile { it < POPUP_TIMEOUT_MS }
+            .toList()
 
     sealed class DismissOutcome {
         /** Another check remains; schedule it and persist the new dismissed count. */

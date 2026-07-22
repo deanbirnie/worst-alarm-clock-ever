@@ -24,8 +24,11 @@ import com.worstalarm.clock.data.entity.AlarmEntity
 import com.worstalarm.clock.data.entity.AwakeCheckEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class AlarmService : Service() {
@@ -33,6 +36,10 @@ class AlarmService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var player: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /** Live loop that emits the gentle awake-check nudges; separate from the alarm's [player]. */
+    private var awakeNudgeJob: Job? = null
+    private var nudgePlayer: MediaPlayer? = null
 
     /** Tone for the current session: per-alarm override, else the global Settings tone. */
     private var customToneUri: String? = null
@@ -50,8 +57,15 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Android requires startForeground() within ~5s of startForegroundService(), so we
-        // foreground first — even for a start we're about to reject just below.
-        val notification = buildNotification("Alarm", "Waking you up…")
+        // foreground first — even for a start we're about to reject just below. The full-screen
+        // intent on this notification is what actually surfaces the UI over the lock screen when
+        // the device is asleep, so it must target the SAME screen this event shows: the awake
+        // check's gentle popup for an awake-check show, the ringing lockdown for everything else.
+        val notification = if (intent?.action == ACTION_AWAKE_CHECK_SHOW) {
+            buildNotification("Awake check", "Tap \"I'm awake\" to confirm you're up", AwakeCheckActivity::class.java)
+        } else {
+            buildNotification("Alarm", "Waking you up…", AlarmActivity::class.java)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -254,10 +268,12 @@ class AlarmService : Service() {
     }
 
     // -------- Awake checks --------
-    // After the routine's final step, two silent "are you awake?" popups must be dismissed,
-    // each appearing at a random point 5-15 minutes after the previous one resolves, before
-    // the alarm is fully off. Missing either one's 90s dismiss deadline is a full reset: the
-    // cycle starts over from a fresh re-ring that only requires the final step to be rescanned.
+    // After the routine's final step, two "are you awake?" popups must be dismissed, each
+    // appearing at a random point 5-15 minutes after the previous one resolves, before the alarm
+    // is fully off. While a popup shows, a gentle cue (soft chime + light buzz, never alarm-grade)
+    // repeats every NUDGE_INTERVAL_MS so it's noticed without watching the screen. Missing a
+    // popup's POPUP_TIMEOUT_MS dismiss deadline is a full reset: the cycle starts over from a
+    // fresh re-ring that only requires the final step to be rescanned.
     // State is persisted in Room (AwakeCheckEntity) and scheduled via AlarmManager — same
     // reasoning as step-rings: a killed process or sleeping device must not silently drop it.
 
@@ -278,7 +294,12 @@ class AlarmService : Service() {
         stopSelfSafely()
     }
 
-    /** An armed popup's time has come. No audio — just wake the screen and show it. */
+    /**
+     * An armed popup's time has come. Not the alarm — a *gentle* cue (soft chime + light buzz)
+     * repeats across the ack window so the user notices without watching the screen, then stops
+     * the instant "I'm awake" is tapped ([handleAwakeCheckDismiss]) or the window's AlarmManager
+     * timeout re-rings ([handleAwakeCheckTimeout]).
+     */
     private fun handleAwakeCheckShow(intent: Intent) {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         val dismissedCount = intent.getIntExtra(EXTRA_DISMISSED_COUNT, 0)
@@ -287,22 +308,92 @@ class AlarmService : Service() {
         // Set synchronously so the activity (already being launched by AlarmReceiver) has
         // something to show without waiting on the DB round-trip below.
         AwakeCheckSession.show(alarmId, dismissedCount + 1)
+        startAwakeCheckNudges()
 
         serviceScope.launch {
             val app = application as WorstAlarmApp
             val row = withIO { app.repository.getAwakeCheck(alarmId) }
-            if (row != null) {
-                val deadline = System.currentTimeMillis() + AwakeCheckPolicy.POPUP_TIMEOUT_MS
-                withIO { app.repository.saveAwakeCheck(row.copy(popupDeadlineAtMs = deadline)) }
-                AlarmScheduler.scheduleAwakeCheckTimeout(this@AlarmService, alarmId, deadline)
+            if (row == null) {
+                // No pending row to wait on — don't leave the service nudging forever.
+                stopAwakeCheckNudges()
+                stopSelfSafely()
+                return@launch
             }
-            stopSelfSafely()
+            val deadline = System.currentTimeMillis() + AwakeCheckPolicy.POPUP_TIMEOUT_MS
+            withIO { app.repository.saveAwakeCheck(row.copy(popupDeadlineAtMs = deadline)) }
+            AlarmScheduler.scheduleAwakeCheckTimeout(this@AlarmService, alarmId, deadline)
+            // Deliberately no stopSelfSafely() on the happy path: the service stays foreground to
+            // run the nudge loop until the dismiss or the timeout resolves this check. The
+            // AlarmManager timeout is authoritative even if the process is killed mid-window.
         }
+    }
+
+    private fun startAwakeCheckNudges() {
+        awakeNudgeJob?.cancel()
+        awakeNudgeJob = serviceScope.launch {
+            val deadline = System.currentTimeMillis() + AwakeCheckPolicy.POPUP_TIMEOUT_MS
+            // First nudge fires immediately (offset 0), then one every NUDGE_INTERVAL_MS until
+            // the window closes or the popup is resolved (session cleared / job cancelled).
+            while (isActive &&
+                AwakeCheckSession.state.value != null &&
+                System.currentTimeMillis() < deadline
+            ) {
+                playAwakeCheckNudge()
+                delay(AwakeCheckPolicy.NUDGE_INTERVAL_MS)
+            }
+        }
+    }
+
+    /** One gentle, non-alarm nudge: a short soft chime plus a light double-tap buzz. */
+    private fun playAwakeCheckNudge() {
+        // Light haptic — deliberately short and soft, nothing like the alarm's long looping buzz.
+        vibratorCompat()?.let { vibrator ->
+            val pattern = longArrayOf(0, 120, 90, 120)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1)) // -1 = play once
+            } else {
+                @Suppress("DEPRECATION") vibrator.vibrate(pattern, -1)
+            }
+        }
+
+        // Soft chime — the default *notification* sound, once, at low volume on the notification
+        // stream, so it stays gentle and respects the user's notification volume. Vibration is
+        // the reliable channel; the chime is a bonus (a silent profile / DND may mute it).
+        runCatching {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) ?: return
+            nudgePlayer?.let { old -> runCatching { old.release() } }
+            nudgePlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(this@AlarmService, uri)
+                isLooping = false
+                setVolume(0.4f, 0.4f)
+                setOnCompletionListener { mp ->
+                    runCatching { mp.release() }
+                    if (nudgePlayer === mp) nudgePlayer = null
+                }
+                prepare()
+                start()
+            }
+        }
+    }
+
+    private fun stopAwakeCheckNudges() {
+        awakeNudgeJob?.cancel()
+        awakeNudgeJob = null
+        nudgePlayer?.let { p -> runCatching { p.stop() }; runCatching { p.release() } }
+        nudgePlayer = null
+        runCatching { vibratorCompat()?.cancel() }
     }
 
     /** The user tapped "I'm awake". */
     private fun handleAwakeCheckDismiss(alarmId: Long) {
         if (alarmId <= 0) { stopSelfSafely(); return }
+        stopAwakeCheckNudges()
         AlarmScheduler.cancelAwakeCheckTimeout(this, alarmId)
         AwakeCheckSession.clear()
 
@@ -340,6 +431,7 @@ class AlarmService : Service() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         val expectedDeadline = intent.getLongExtra(EXTRA_DEADLINE, -1L)
         if (alarmId <= 0) { stopSelfSafely(); return }
+        stopAwakeCheckNudges()
 
         serviceScope.launch {
             val app = application as WorstAlarmApp
@@ -446,12 +538,19 @@ class AlarmService : Service() {
 
     // -------- Notification --------
 
-    private fun buildNotification(title: String, text: String): Notification {
-        val openIntent = Intent(this, AlarmActivity::class.java).apply {
+    private fun buildNotification(
+        title: String,
+        text: String,
+        fullScreenTarget: Class<*> = AlarmActivity::class.java
+    ): Notification {
+        val openIntent = Intent(this, fullScreenTarget).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        // Distinct request code per target so the two possible full-screen PendingIntents
+        // (ringing lockdown vs awake-check popup) never alias each other under FLAG_UPDATE_CURRENT.
+        val requestCode = if (fullScreenTarget == AwakeCheckActivity::class.java) 1 else 0
         val openPi = PendingIntent.getActivity(
-            this, 0, openIntent,
+            this, requestCode, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, WorstAlarmApp.ALARM_CHANNEL_ID)
@@ -469,6 +568,8 @@ class AlarmService : Service() {
 
     private fun updateNotification(title: String, text: String) {
         val nm = getSystemService(NotificationManager::class.java)
+        // Updates only happen mid-ring (step countdown / emergency), while AlarmActivity is
+        // already up — so the default full-screen target (AlarmActivity) is correct here.
         nm?.notify(NOTIFICATION_ID, buildNotification(title, text))
     }
 
@@ -476,6 +577,7 @@ class AlarmService : Service() {
         // Deliberately do NOT cancel a pending step ring here: if the OS kills the
         // service mid-countdown, the AlarmManager alarm survives and restarts us.
         stopAudioAndVibration()
+        stopAwakeCheckNudges()
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
         super.onDestroy()

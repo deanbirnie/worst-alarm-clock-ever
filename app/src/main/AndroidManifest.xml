@@ -16,6 +16,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Launch the full-screen ringing UI from the background / over the lock screen. Without
+         this, setFullScreenIntent(...) is silently ignored on Android 10+, so the alarm would
+         ring (foreground service) but its screen would never appear. Auto-granted to alarm apps
+         (we declare USE_EXACT_ALARM); on Android 14+ it may need an explicit user grant, which
+         the app checks for and prompts (see MainActivity.openFullScreenIntentSettings). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Overlay (re-assert alarm UI if user tries to leave) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 

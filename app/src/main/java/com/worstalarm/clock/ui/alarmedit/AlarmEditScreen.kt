@@ -249,9 +249,10 @@ fun AlarmEditScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Awake check", style = MaterialTheme.typography.titleSmall)
                         Text(
-                            "After the final scan, two silent popups (5-15 min apart) must " +
-                                "be dismissed before the alarm is fully off. Miss one and it " +
-                                "rings again.",
+                            "After the final scan, two popups (5-15 min apart) must be dismissed " +
+                                "before the alarm is fully off. Each nudges you gently (a soft " +
+                                "chime and buzz, not the alarm) until you tap it. Miss one and " +
+                                "the alarm rings again.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

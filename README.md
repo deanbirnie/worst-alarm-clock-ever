@@ -81,10 +81,12 @@ in the persistent notification.
   to the kitchen is easier.
 - **Awake check** (per-alarm toggle, on by default) — scanning the final
   barcode drops the lock-screen takeover, but the alarm isn't done: twice, at
-  a random point 5-15 minutes apart, a silent popup lights up the screen and
-  must be tapped "I'm awake" within 90 seconds. Miss one and the alarm rings
-  again — rescan just the final location to try the pair again. Only two
-  dismissals in a row actually turns it off, so drifting back to sleep after
+  a random point 5-15 minutes apart, a popup appears and gently nudges you (a
+  soft chime + light buzz, repeating so you notice without watching the
+  screen — never alarm-grade), and must be tapped "I'm awake" within ~3
+  minutes. Miss one and the alarm rings again — rescan just the final location
+  to try the pair again. Only two dismissals in a row actually turns it off,
+  so drifting back to sleep after
   "disarming" doesn't work. Turn it off per alarm in the alarm editor if you
   don't want it (e.g. a short nap).
 
@@ -148,7 +150,9 @@ protected (`RESTRICT`) and the UI refuses to delete them.
 AlarmScheduler.schedule()            computes next trigger, arms AlarmManager.setAlarmClock
         │  (alarm time)
         ▼
-AlarmReceiver (broadcast)            starts AlarmService (foreground) + launches AlarmActivity
+AlarmReceiver (broadcast)            starts AlarmService (foreground); the service's
+                                     full-screen-intent notification surfaces AlarmActivity
+                                     over the lock screen (needs USE_FULL_SCREEN_INTENT)
         │
         ▼
 AlarmService                         owns the state machine (AlarmSession StateFlow):
@@ -164,9 +168,9 @@ OverlayService                       full-screen overlay if the user escapes to 
 BootReceiver                         re-arms all enabled alarms (+ pending awake checks) after reboot
 
 Awake-check cycle (AwakeCheckEntity, AlarmScheduler.scheduleAwakeCheck/-Timeout):
-   schedule popup 5-15 min out ─►    AwakeCheckActivity shows, screen on, not a lockdown
+   schedule popup 5-15 min out ─►    AwakeCheckActivity shows + gentle cue repeats (chime+buzz)
    "I'm awake" tapped in time ─►     2nd dismissal this cycle? done : schedule the next popup
-   90s dismiss deadline expires ►    full reset; re-ring pinned at the FINAL step only
+   ~3 min dismiss deadline expires ► full reset; re-ring pinned at the FINAL step only
 ```
 
 Source lives under `app/src/main/java/com/worstalarm/clock/`:
@@ -180,6 +184,7 @@ theme).
 |---|---|---|
 | Camera | Scanning barcodes | First launch (and again at scan time if denied) |
 | Notifications (Android 13+) | The foreground service's persistent notification + full-screen alarm intent | First launch |
+| Full-screen intent (Android 14+) | Launches the ringing UI over the lock screen when the phone's asleep — without it the alarm rings but no screen appears | Auto-granted to alarm apps; a banner deep-links to the setting if not |
 | Display over other apps | The re-assert overlay that blocks escaping the alarm | Banner on the home screen (optional but recommended) |
 | Exact alarms / boot / vibrate / wake lock | Core alarm behavior (boot receiver + engine run in Direct Boot so alarms fire before first unlock) | Install time (no prompt; `setAlarmClock` needs no special exemption) |
 
