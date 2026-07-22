@@ -24,9 +24,10 @@ import androidx.compose.ui.unit.sp
 import com.worstalarm.clock.alarm.AwakeCheckPolicy
 
 /**
- * Silent "are you still awake?" popup. Not a lockdown like the ringing screen — home/back
- * work normally — but the only thing that counts as a genuine response is the button:
- * backing out or ignoring it just leaves the check pending until it times out and the
+ * "Are you still awake?" popup. Not a lockdown like the ringing screen — home/back work
+ * normally — and while it's up a gentle cue (soft chime + light buzz) repeats so you notice
+ * it without watching the screen. The only thing that counts as a genuine response is the
+ * button: backing out or ignoring it just leaves the check pending until it times out and the
  * alarm rings again (see AlarmService.handleAwakeCheckTimeout).
  */
 @Composable

@@ -15,12 +15,13 @@ import com.worstalarm.clock.ui.theme.WorstAlarmTheme
 import kotlinx.coroutines.launch
 
 /**
- * Lightweight, silent "are you awake?" popup shown 5-15 minutes (twice) after the final
- * alarm location is scanned. Unlike [AlarmActivity] this is NOT a lockdown: back and home
- * work normally, and there's no overlay re-assertion. Only tapping "I'm awake" counts as a
- * genuine response — backing out just leaves the check pending, and it's scored a miss if
- * [AwakeCheckPolicy.POPUP_TIMEOUT_MS] elapses without that tap (see
- * [AlarmService.handleAwakeCheckTimeout]), which rings the alarm again.
+ * Lightweight "are you awake?" popup shown 5-15 minutes (twice) after the final alarm
+ * location is scanned. Unlike [AlarmActivity] this is NOT a lockdown: back and home work
+ * normally, and there's no overlay re-assertion. While it's showing, [AlarmService] repeats a
+ * gentle cue (soft chime + light buzz) so it's noticed without watching the screen. Only
+ * tapping "I'm awake" counts as a genuine response — backing out just leaves the check
+ * pending, and it's scored a miss if [AwakeCheckPolicy.POPUP_TIMEOUT_MS] elapses without that
+ * tap (see [AlarmService.handleAwakeCheckTimeout]), which rings the alarm again.
  */
 class AwakeCheckActivity : ComponentActivity() {
 

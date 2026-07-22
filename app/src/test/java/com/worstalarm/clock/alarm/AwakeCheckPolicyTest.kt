@@ -34,8 +34,34 @@ class AwakeCheckPolicyTest {
     }
 
     @Test
-    fun `popup timeout is 90 seconds`() {
-        assertEquals(90_000L, AwakeCheckPolicy.POPUP_TIMEOUT_MS)
+    fun `popup ack window is three minutes`() {
+        assertEquals(3 * 60_000L, AwakeCheckPolicy.POPUP_TIMEOUT_MS)
+    }
+
+    @Test
+    fun `nudge interval is 30 seconds`() {
+        assertEquals(30_000L, AwakeCheckPolicy.NUDGE_INTERVAL_MS)
+    }
+
+    @Test
+    fun `first nudge fires immediately on show`() {
+        assertEquals(0L, AwakeCheckPolicy.nudgeOffsetsMs().first())
+    }
+
+    @Test
+    fun `nudges repeat every interval and never reach the deadline`() {
+        val offsets = AwakeCheckPolicy.nudgeOffsetsMs()
+        // Evenly spaced by the interval.
+        offsets.zipWithNext { a, b -> assertEquals(AwakeCheckPolicy.NUDGE_INTERVAL_MS, b - a) }
+        // All strictly inside the ack window — a nudge at/after the deadline would race the miss.
+        assertTrue("last nudge ${offsets.last()} must be < window", offsets.all { it < AwakeCheckPolicy.POPUP_TIMEOUT_MS })
+    }
+
+    @Test
+    fun `the window fits several gentle nudges, not just one`() {
+        // The whole point of the fix: you don't have to watch the screen for a single silent
+        // popup. Expect a handful of repeats across the window.
+        assertEquals(6, AwakeCheckPolicy.nudgeOffsetsMs().size)
     }
 
     @Test
