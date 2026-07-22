@@ -29,7 +29,8 @@ class MainActivity : ComponentActivity() {
             WorstAlarmTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Navigation(
-                        onRequestOverlayPermission = ::openOverlaySettings
+                        onRequestOverlayPermission = ::openOverlaySettings,
+                        onRequestFullScreenIntentPermission = ::openFullScreenIntentSettings
                     )
                 }
             }
@@ -57,6 +58,20 @@ class MainActivity : ComponentActivity() {
             startActivity(
                 Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
+    }
+
+    // Android 14+ can require an explicit grant for USE_FULL_SCREEN_INTENT (below 14 it's
+    // auto-granted). Without it, the alarm rings but its full-screen UI never appears over the
+    // lock screen — so send the user straight to the per-app setting to turn it on.
+    private fun openFullScreenIntentSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                     Uri.parse("package:$packageName")
                 )
             )

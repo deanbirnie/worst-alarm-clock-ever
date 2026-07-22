@@ -243,11 +243,17 @@ swapped by local state, not the nav graph: **Ringing → Scanning → Emergency*
 - `FloatingActionButton` bottom-right: `Add` icon, standard M3 FAB
   (primaryContainer-colored, 16dp corners).
 - Body, top to bottom, 16dp screen padding:
-  1. **Overlay-permission banner** (conditional — only shown if "Display
+  1. **Full-screen-alarm banner** (conditional — Android 14+ only, shown if
+     `NotificationManager.canUseFullScreenIntent()` is false): a `Card`, bold
+     title "Allow full-screen alarms", a `bodySmall` explanation, an 8dp
+     spacer, and an `OutlinedButton` "Open settings" that deep-links to the
+     per-app full-screen-intent setting. Shown first because without it the
+     alarm can ring with no visible screen.
+  2. **Overlay-permission banner** (conditional — only shown if "Display
      over other apps" isn't granted): a `Card` containing bold title
      "Grant 'Display over other apps'", a `bodySmall` explanation line, an
      8dp spacer, and an `OutlinedButton` "Open settings".
-  2. **Empty state** (if no alarms): centered in the remaining space — a
+  3. **Empty state** (if no alarms): centered in the remaining space — a
      ☀️ glyph at 44sp, 12dp gap, "No alarms yet" in `titleMedium`, 4dp gap,
      "Tap + to build your first wake-up routine." in `onSurfaceVariant`.
   3. **Alarm list** (if alarms exist): a `LazyColumn`, 12dp vertical gaps

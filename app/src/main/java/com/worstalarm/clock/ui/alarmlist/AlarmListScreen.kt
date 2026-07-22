@@ -1,5 +1,7 @@
 package com.worstalarm.clock.ui.alarmlist
 
+import android.app.NotificationManager
+import android.os.Build
 import android.provider.Settings as SystemSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,18 +75,21 @@ fun AlarmListScreen(
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
+    onRequestFullScreenIntentPermission: () -> Unit,
     vm: AppViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val alarms by vm.alarms().collectAsStateWithLifecycle(initialValue = emptyList())
-    // Re-checked on every ON_RESUME so the banner disappears when the user returns from
-    // the "Display over other apps" settings page after granting.
+    // Both permissions are re-checked on every ON_RESUME so the banners disappear when the
+    // user returns from the relevant settings page after granting.
     var canDrawOverlays by remember { mutableStateOf(SystemSettings.canDrawOverlays(context)) }
+    var canUseFullScreenIntent by remember { mutableStateOf(deviceCanUseFullScreenIntent(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canDrawOverlays = SystemSettings.canDrawOverlays(context)
+                canUseFullScreenIntent = deviceCanUseFullScreenIntent(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -170,6 +175,10 @@ fun AlarmListScreen(
             }
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                if (!canUseFullScreenIntent) {
+                    FullScreenIntentPermissionCard(onRequest = onRequestFullScreenIntentPermission)
+                    Spacer(Modifier.height(12.dp))
+                }
                 if (!canDrawOverlays) {
                     OverlayPermissionCard(onRequest = onRequestOverlayPermission)
                     Spacer(Modifier.height(12.dp))
@@ -254,6 +263,34 @@ private fun OverlayPermissionCard(onRequest: () -> Unit) {
             OutlinedButton(onClick = onRequest) { Text("Open settings") }
         }
     }
+}
+
+@Composable
+private fun FullScreenIntentPermissionCard(onRequest: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Allow full-screen alarms", fontWeight = FontWeight.Bold)
+            Text(
+                "Without this, the alarm can ring while the screen stays dark and you'd have to " +
+                    "open the app by hand. Turn on \"full-screen notifications\" so the alarm " +
+                    "shows over the lock screen.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onRequest) { Text("Open settings") }
+        }
+    }
+}
+
+/**
+ * Whether the app may launch its full-screen alarm UI from the background. Below Android 14
+ * `USE_FULL_SCREEN_INTENT` is auto-granted (always true here); on 14+ it can be revoked/ungranted,
+ * so ask the NotificationManager and, if it says no, surface [FullScreenIntentPermissionCard].
+ */
+private fun deviceCanUseFullScreenIntent(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+    val nm = context.getSystemService(NotificationManager::class.java)
+    return nm?.canUseFullScreenIntent() ?: true
 }
 
 /**

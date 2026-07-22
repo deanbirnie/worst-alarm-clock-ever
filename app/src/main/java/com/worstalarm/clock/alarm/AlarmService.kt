@@ -57,8 +57,15 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Android requires startForeground() within ~5s of startForegroundService(), so we
-        // foreground first — even for a start we're about to reject just below.
-        val notification = buildNotification("Alarm", "Waking you up…")
+        // foreground first — even for a start we're about to reject just below. The full-screen
+        // intent on this notification is what actually surfaces the UI over the lock screen when
+        // the device is asleep, so it must target the SAME screen this event shows: the awake
+        // check's gentle popup for an awake-check show, the ringing lockdown for everything else.
+        val notification = if (intent?.action == ACTION_AWAKE_CHECK_SHOW) {
+            buildNotification("Awake check", "Tap \"I'm awake\" to confirm you're up", AwakeCheckActivity::class.java)
+        } else {
+            buildNotification("Alarm", "Waking you up…", AlarmActivity::class.java)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -531,12 +538,19 @@ class AlarmService : Service() {
 
     // -------- Notification --------
 
-    private fun buildNotification(title: String, text: String): Notification {
-        val openIntent = Intent(this, AlarmActivity::class.java).apply {
+    private fun buildNotification(
+        title: String,
+        text: String,
+        fullScreenTarget: Class<*> = AlarmActivity::class.java
+    ): Notification {
+        val openIntent = Intent(this, fullScreenTarget).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        // Distinct request code per target so the two possible full-screen PendingIntents
+        // (ringing lockdown vs awake-check popup) never alias each other under FLAG_UPDATE_CURRENT.
+        val requestCode = if (fullScreenTarget == AwakeCheckActivity::class.java) 1 else 0
         val openPi = PendingIntent.getActivity(
-            this, 0, openIntent,
+            this, requestCode, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, WorstAlarmApp.ALARM_CHANNEL_ID)
@@ -554,6 +568,8 @@ class AlarmService : Service() {
 
     private fun updateNotification(title: String, text: String) {
         val nm = getSystemService(NotificationManager::class.java)
+        // Updates only happen mid-ring (step countdown / emergency), while AlarmActivity is
+        // already up — so the default full-screen target (AlarmActivity) is correct here.
         nm?.notify(NOTIFICATION_ID, buildNotification(title, text))
     }
 

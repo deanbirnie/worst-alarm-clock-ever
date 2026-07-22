@@ -150,7 +150,9 @@ protected (`RESTRICT`) and the UI refuses to delete them.
 AlarmScheduler.schedule()            computes next trigger, arms AlarmManager.setAlarmClock
         │  (alarm time)
         ▼
-AlarmReceiver (broadcast)            starts AlarmService (foreground) + launches AlarmActivity
+AlarmReceiver (broadcast)            starts AlarmService (foreground); the service's
+                                     full-screen-intent notification surfaces AlarmActivity
+                                     over the lock screen (needs USE_FULL_SCREEN_INTENT)
         │
         ▼
 AlarmService                         owns the state machine (AlarmSession StateFlow):
@@ -182,6 +184,7 @@ theme).
 |---|---|---|
 | Camera | Scanning barcodes | First launch (and again at scan time if denied) |
 | Notifications (Android 13+) | The foreground service's persistent notification + full-screen alarm intent | First launch |
+| Full-screen intent (Android 14+) | Launches the ringing UI over the lock screen when the phone's asleep — without it the alarm rings but no screen appears | Auto-granted to alarm apps; a banner deep-links to the setting if not |
 | Display over other apps | The re-assert overlay that blocks escaping the alarm | Banner on the home screen (optional but recommended) |
 | Exact alarms / boot / vibrate / wake lock | Core alarm behavior (boot receiver + engine run in Direct Boot so alarms fire before first unlock) | Install time (no prompt; `setAlarmClock` needs no special exemption) |
 

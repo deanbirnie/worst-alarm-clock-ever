@@ -227,6 +227,26 @@ things only when they're verified working.
   - **Needs on-device confirmation** (JVM/CI can't exercise audio/haptics): the cue is
     audible-but-gentle, the buzz fires, and it stops promptly on "I'm awake".
 
+## Phase 2.11 — Full-screen alarm reliability (v0.4.4, reported 2026-07-22)
+
+- [x] Fix: the alarm could **ring with no screen** — the foreground service played audio but the
+      full-screen UI never appeared, so the user had to unlock and open the app by hand. Root
+      cause: the manifest never declared **`USE_FULL_SCREEN_INTENT`**, so `setFullScreenIntent(...)`
+      on the alarm notification was silently ignored on Android 10+ (the direct `startActivity`
+      from the receiver is background-blocked on modern Android, so both launch paths failed).
+  - Declared `USE_FULL_SCREEN_INTENT`. Auto-granted to alarm apps (we already declare
+    `USE_EXACT_ALARM`); on **Android 14+** it can require an explicit user grant, so the alarm
+    list shows a **"Allow full-screen alarms" card** (mirrors the overlay-permission card,
+    re-checked on resume) that deep-links to `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` when
+    `NotificationManager.canUseFullScreenIntent()` is false.
+  - The foreground notification's full-screen intent is now **targeted by action**: the
+    awake-check popup (`AwakeCheckActivity`) for an awake-check show, the ringing lockdown
+    (`AlarmActivity`) for everything else — so enabling the permission can't wrongly launch the
+    full alarm lockdown during an awake check, and both events now surface reliably from a cold,
+    locked screen.
+  - **Needs on-device confirmation** (JVM/CI can't exercise this): set an alarm, lock/sleep the
+    phone, and confirm the ringing screen appears over the lock screen without opening the app.
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit
