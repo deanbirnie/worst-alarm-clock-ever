@@ -2,9 +2,9 @@
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
 the whole codebase (first pass at v0.4.0; kept current since). Fixed / verified
-entries are marked **✅** inline (B1, B2, B9, B10, B11 so far); everything else is
-the "document now, fix later" ledger. Each entry says where it is, what goes wrong,
-why, a proposed fix, and how we'd test it.
+entries are marked **✅** inline (B1, B2, B5, B6, B9, B10, B11 so far); everything
+else is the "document now, fix later" ledger. Each entry says where it is, what goes
+wrong, why, a proposed fix, and how we'd test it.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -102,31 +102,37 @@ JVM-only, see the coverage section).
 - **How to test:** Room in-memory instrumented test (or Robolectric) asserting the
   alarm+steps commit together; see coverage gap C3.
 
-### B5 — `QrGeneratorScreen` list key can collide on a duplicate random value · Low · Confirmed
-- **Where:** `QrGeneratorScreen` (`app/src/main/java/com/worstalarm/clock/ui/qr/QrGeneratorScreen.kt:145`)
-  — `items(items = codes, key = { it.value })`.
-- **What:** Codes are 10 chars over a 36-char alphabet, so a duplicate is very
+### B5 — `QrGeneratorScreen` list key can collide on a duplicate random value · Low · Confirmed · ✅ Fixed in 0.4.8
+- **Where:** `QrGeneratorScreen` — `items(items = codes, key = { it.value })`.
+- **What:** Codes are 10 chars over a 36-char alphabet, so a duplicate was very
   unlikely but possible. Two identical values → Compose throws
   "Key … was already used" and the screen crashes.
 - **Why:** Using the (non-unique-by-construction) value as the list key.
-- **Proposed fix:** Give `GeneratedCode` a stable unique id (e.g. an incrementing
-  counter or `UUID`) and key on that; or dedupe on generation.
-- **How to test:** Unit-test the generator/dedupe helper (uniqueness across N
-  draws with a seeded `Random`).
+- **Fix (0.4.8):** Extracted a pure `QrCodeGenerator`. `GeneratedCode` now carries a
+  stable, list-unique `id` (incrementing past the current max), and the list keys on
+  `it.id` instead of `it.value`, so a value collision can never crash it. As a bonus,
+  `newCodes` also dedupes values against the existing list, so the user never sees the
+  same code twice.
+- **How it was tested:** `QrCodeGeneratorTest` (JVM) — value format, unique/increasing
+  ids across successive append-then-generate calls, no value repeats an existing one,
+  and an all-unique 2000-code batch.
 
-### B6 — Emergency "complete" uses `DisposableEffect` as a side-effect trigger · Low · Confirmed
-- **Where:** `EmergencyScreen` (`app/src/main/java/com/worstalarm/clock/ui/emergency/EmergencyScreen.kt:73-76`)
+### B6 — Emergency "complete" uses `DisposableEffect` as a side-effect trigger · Low · Confirmed · ✅ Fixed in 0.4.8
+- **Where:** `EmergencyScreen` (`app/src/main/java/com/worstalarm/clock/ui/emergency/EmergencyScreen.kt`)
 - **What:** `DisposableEffect(taps) { if (taps >= TARGET_TAPS) onComplete(); onDispose {} }`
-  fires `onComplete()` during composition. It works today (taps only reaches 500
-  once), but it's an anti-pattern: any recomposition at `taps >= 500` re-invokes
-  `onComplete()`. Because taps can still increment past 500 (the tile stays
-  clickable), a 501st tap re-fires `onComplete()`.
+  fired `onComplete()` during composition. Any recomposition at `taps >= 500` re-invoked
+  it, and because taps could still increment past 500 (the tile stayed clickable), a
+  501st tap re-fired `onComplete()`.
 - **Why:** Side effect in `DisposableEffect` instead of `LaunchedEffect`, and no
   "already completed" latch.
-- **Proposed fix:** Use `LaunchedEffect(taps >= TARGET_TAPS)` gated on a
-  one-shot boolean, and stop accepting taps once complete.
-- **How to test:** Extract the tap/idle/complete rules into a pure helper (see
-  coverage gap C1) and unit-test "complete fires exactly once".
+- **Fix (0.4.8):** Extracted a pure `EmergencyGamePolicy`. Completion now runs in a
+  `LaunchedEffect(taps)` behind a one-shot `completed` latch, and the grid stops
+  accepting taps at the target (`enabled = isLit && EmergencyGamePolicy.acceptsTap(taps)`),
+  so taps can't advance to 501 — `onComplete()` fires exactly once. The idle watchdog also
+  bails once completed, and the "next lit square" pick moved into the tested policy.
+- **How it was tested:** `EmergencyGamePolicyTest` (JVM) — `isComplete`/`acceptsTap`
+  thresholds, a simulation asserting completion fires exactly once under 600 tap attempts,
+  idle-timeout boundary, and `nextLitIndex` (never the current cell, covers the rest).
 
 ### B7 — `USE_EXACT_ALARM` + `SCHEDULE_EXACT_ALARM` both declared; neither is needed · Low · Needs-device
 - **Where:** `AndroidManifest.xml:7-8`.
@@ -236,6 +242,8 @@ JVM-only, see the coverage section).
 | `AlarmAdmissionPolicyTest` | Single-session admission: ring / re-ring / defer / invalid (B2) |
 | `AlarmSchedulerNextTriggerTest` | `computeNextTriggerMs` DST (spring-forward / fall-back), exact-minute boundary, weekday wrap (B9/C2) |
 | `TimeChangePolicyTest` | Which broadcasts re-arm alarms on a timezone / clock change (B11) |
+| `QrCodeGeneratorTest` | QR code id uniqueness + value dedupe (B5) |
+| `EmergencyGamePolicyTest` | Emergency mini-game: complete-once, tap gate, idle timeout, lit-cell move (B6/C1) |
 | `AwakeCheckPolicyTest` | Awake-check intervals, dismiss transitions, stale-timeout guard |
 | `AlarmSessionTest` | Session start + final-step pin for miss re-ring |
 | `NextRingFormatterTest` | "Rings in …" formatting + a few scheduler paths (non-DST) |
@@ -260,7 +268,7 @@ Composable. Anything needing an Android runtime is currently unverified.
 | # | Gap | Proposed test | Type | Unblocks |
 |---|---|---|---|---|
 | **C2** ✅ | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | `AlarmSchedulerNextTriggerTest` — fixed `Calendar` + `America/New_York` spring-forward & fall-back, `candidate == now`, weekday wrap (done 0.4.7 with B9) | JVM | B9 done |
-| **C1** | Emergency mini-game rules (idle reset counting, complete-once, alarm-stays-on after N idles) | Extract a pure `EmergencyGamePolicy` (taps, idle, resets → state) and unit-test it | JVM | B6 |
+| **C1** ✅ | Emergency mini-game rules (complete-once, tap gate, idle timeout, lit-cell move) | `EmergencyGamePolicyTest` — done in 0.4.8 with B6 | JVM | B6 done |
 | **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (done in 0.4.6 with B2) | JVM | B2 done; B3 still open |
 | **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
 | **C3** | Room: migrations 1→2→3→4 and `saveAlarm` atomicity + `usageCount`/RESTRICT delete guard | `androidTest` with in-memory DB (or Robolectric) — needs new test infra | Instrumented | B4 |
@@ -299,6 +307,5 @@ Composable. Anything needing an Android runtime is currently unverified.
 1. ~~**C2** (scheduler DST)~~ — done in 0.4.7 (B9 verified correct; B11 receiver added).
 2. **C5 + B1** (foreground-start decision) — B1 is already fixed via `ServiceStartPolicy`;
    the remaining value is extracting the keep-foreground-vs-stop decision as a pure test.
-3. **C1 + B6** (emergency policy extract) — removes the last untested piece of the
-   disarm path.
+3. ~~**C1 + B6** (emergency policy extract)~~ — done in 0.4.8 (`EmergencyGamePolicy`).
 4. Stand up Robolectric once, then land **C3** (Room migrations/atomicity, unblocks B4).

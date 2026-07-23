@@ -268,12 +268,13 @@ things only when they're verified working.
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > **Bugs and test-coverage gaps now live in [BUGS.md](BUGS.md)** — that's the single
-> source of truth for them. As of v0.4.7: **B1** (stuck foreground service, 0.4.3),
-> **B2** (a second alarm clobbering the first, 0.4.6), **B9** (scheduler DST/exact-minute
-> correctness — verified correct, 0.4.7), **B10** (awake-check "I'm awake" no-op, 0.4.5),
-> and **B11** (timezone / clock-change re-arm, 0.4.7) are ✅ fixed/verified; **B3–B8** are
-> open; coverage gaps — an `AlarmService` state-machine test, Compose smoke tests, and the
-> Robolectric/instrumented infra those need — are catalogued there too (C2 and C4 have
+> source of truth for them. As of v0.4.8, fixed/verified: **B1** (stuck foreground
+> service, 0.4.3), **B2** (a second alarm clobbering the first, 0.4.6), **B5** (QR list
+> key crash, 0.4.8), **B6** (emergency complete-once, 0.4.8), **B9** (scheduler
+> DST/exact-minute — verified correct, 0.4.7), **B10** (awake-check "I'm awake" no-op,
+> 0.4.5), and **B11** (timezone / clock-change re-arm, 0.4.7). Still open: **B3, B4, B7,
+> B8**. Coverage gaps — an `AlarmService` state-machine test, Compose smoke tests, and the
+> Robolectric/instrumented infra those need — are catalogued there too (C1, C2, C4 have
 > landed). Work the bugs and coverage from BUGS.md; the items below are the remaining
 > **feature/hardening** work.
 

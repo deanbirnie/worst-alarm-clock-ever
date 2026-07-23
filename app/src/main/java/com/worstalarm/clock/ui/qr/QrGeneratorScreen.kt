@@ -55,14 +55,8 @@ import com.worstalarm.clock.data.entity.BarcodeEntity
 import com.worstalarm.clock.ui.AppViewModel
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.random.Random
 
 private const val QR_PX = 512
-
-private val CODE_CHARS = ('A'..'Z') + ('0'..'9')
-
-private fun randomCodeValue(): String =
-    "WACE-" + (1..10).map { CODE_CHARS.random(Random) }.joinToString("")
 
 /** Render a QR code for [value] as a bitmap (offline, via ZXing). */
 private fun qrBitmap(value: String, sizePx: Int = QR_PX): Bitmap {
@@ -101,8 +95,6 @@ private fun shareQr(context: Context, value: String, name: String) {
     }
 }
 
-private data class GeneratedCode(val value: String)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QrGeneratorScreen(
@@ -133,16 +125,16 @@ fun QrGeneratorScreen(
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { codes.add(GeneratedCode(randomCodeValue())) }) {
+                Button(onClick = { codes.addAll(QrCodeGenerator.newCodes(codes, 1)) }) {
                     Text("Generate code")
                 }
                 OutlinedButton(onClick = {
-                    repeat(3) { codes.add(GeneratedCode(randomCodeValue())) }
+                    codes.addAll(QrCodeGenerator.newCodes(codes, 3))
                 }) { Text("Generate 3") }
             }
             Spacer(Modifier.height(12.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(items = codes, key = { it.value }) { code ->
+                items(items = codes, key = { it.id }) { code ->
                     GeneratedCodeCard(code = code, vm = vm)
                 }
             }
