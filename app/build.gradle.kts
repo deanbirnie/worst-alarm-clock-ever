@@ -12,8 +12,8 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 22
-        versionName = "0.4.9"
+        versionCode = 23
+        versionName = "0.5.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -70,6 +70,14 @@ android {
             "META-INF/LGPL2.1",
             "META-INF/*.kotlin_module"
         )
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged manifest/resources to host Room's SQLite in the
+            // fast JVM `testDebugUnitTest` lane (no emulator) — see the Room DAO tests.
+            isIncludeAndroidResources = true
+        }
     }
 
     // Name APK files "WorstAlarmEver-<version>-<buildType>.apk" instead of the
@@ -133,6 +141,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    // Robolectric hosts Room's SQLite in JVM unit tests (Room/DAO/transaction coverage) so
+    // the DB tests run in CI's existing `testDebugUnitTest` step, no emulator needed.
+    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.test:core:1.6.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

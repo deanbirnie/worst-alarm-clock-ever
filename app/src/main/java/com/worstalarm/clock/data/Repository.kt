@@ -32,14 +32,10 @@ class Repository(
         return true
     }
 
-    /** Persist an alarm + its ordered steps atomically (as far as Room single-call scope allows). */
-    suspend fun saveAlarm(alarm: AlarmEntity, steps: List<RoutineStepEntity>): Long {
-        val id = if (alarm.id == 0L) alarmDao.insertAlarm(alarm)
-        else { alarmDao.updateAlarm(alarm); alarm.id }
-        val normalized = steps.mapIndexed { idx, s -> s.copy(alarmId = id, stepIndex = idx) }
-        alarmDao.replaceSteps(id, normalized)
-        return id
-    }
+    /** Persist an alarm + its ordered steps in one transaction — they commit together or not at
+     *  all (B4). See [AlarmDao.saveAlarmWithSteps]. */
+    suspend fun saveAlarm(alarm: AlarmEntity, steps: List<RoutineStepEntity>): Long =
+        alarmDao.saveAlarmWithSteps(alarm, steps)
 
     suspend fun setEnabled(id: Long, enabled: Boolean) = alarmDao.setEnabled(id, enabled)
     suspend fun deleteAlarm(id: Long) = alarmDao.deleteAlarm(id)
