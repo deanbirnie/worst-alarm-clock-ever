@@ -75,4 +75,19 @@ interface AlarmDao {
         deleteStepsFor(alarmId)
         insertSteps(steps)
     }
+
+    /**
+     * Upsert an alarm and replace its steps in a **single transaction** (B4). The alarm row and
+     * its steps must commit together — otherwise a crash/process-death between the two writes
+     * could leave an alarm with no steps, which `handleRing` then silently disables. Steps are
+     * re-numbered to their list position and pointed at the (possibly newly-generated) alarm id
+     * inside the transaction, so callers just pass the intended order.
+     */
+    @Transaction
+    suspend fun saveAlarmWithSteps(alarm: AlarmEntity, steps: List<RoutineStepEntity>): Long {
+        val id = if (alarm.id == 0L) insertAlarm(alarm) else { updateAlarm(alarm); alarm.id }
+        val normalized = steps.mapIndexed { idx, s -> s.copy(alarmId = id, stepIndex = idx) }
+        replaceSteps(id, normalized)
+        return id
+    }
 }

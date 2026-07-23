@@ -2,7 +2,7 @@
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
 the whole codebase (first pass at v0.4.0; kept current since). Fixed / verified
-entries are marked **✅** inline (B1, B2, B5, B6, B7, B8, B9, B10, B11 so far);
+entries are marked **✅** inline (B1, B2, B4, B5, B6, B7, B8, B9, B10, B11 so far);
 everything else is the "document now, fix later" ledger. Each entry says where it is,
 what goes wrong, why, a proposed fix, and how we'd test it.
 
@@ -88,19 +88,21 @@ JVM-only, see the coverage section).
 - **How to test:** Model the timeline transitions as pure state and unit-test the
   collision cases; full confidence needs an instrumented/manual run.
 
-### B4 — `saveAlarm` isn't atomic across the alarm row and its steps · Medium · Confirmed
-- **Where:** `Repository.saveAlarm` (`app/src/main/java/com/worstalarm/clock/data/Repository.kt:36-42`)
-- **What:** The alarm insert/update and `replaceSteps` are two separate suspend
-  DAO calls, not one `@Transaction`. A crash/process-death between them can leave
-  an alarm with **no steps** (or stale steps). `handleRing` partly masks this by
-  disabling an alarm whose `orderedSteps` is empty — which means a save
-  interrupted at the wrong moment could silently *disable* an alarm the user
-  thought they saved.
+### B4 — `saveAlarm` isn't atomic across the alarm row and its steps · Medium · Confirmed · ✅ Fixed in 0.5.0
+- **Where:** `Repository.saveAlarm` → `AlarmDao` (`app/src/main/java/com/worstalarm/clock/data/`).
+- **What:** The alarm insert/update and `replaceSteps` were two separate suspend DAO
+  calls, not one `@Transaction`. A crash/process-death between them could leave an alarm
+  with **no steps** (or stale steps). `handleRing` partly masks this by disabling an alarm
+  whose `orderedSteps` is empty — so a save interrupted at the wrong moment could silently
+  *disable* an alarm the user thought they saved.
 - **Why:** No surrounding transaction.
-- **Proposed fix:** Add a `@Transaction suspend fun` on `AlarmDao` that does the
-  alarm upsert + `replaceSteps` in one transaction, and call that from the repo.
-- **How to test:** Room in-memory instrumented test (or Robolectric) asserting the
-  alarm+steps commit together; see coverage gap C3.
+- **Fix (0.5.0):** New `AlarmDao.saveAlarmWithSteps(alarm, steps)` — a single `@Transaction`
+  that does the upsert + `replaceSteps` (and the step re-numbering) as one unit; `Repository`
+  just delegates to it. Now the alarm row and its steps commit together or not at all.
+- **How it was tested:** `AlarmPersistenceTest` (Robolectric + in-memory Room) includes a
+  real atomicity test — a save whose steps collide on a primary key aborts and leaves **no
+  orphan alarm** (this test fails against the old two-call code). Plus ordered-step
+  persistence, step replacement (no duplication), and CASCADE-on-delete. See **C3**.
 
 ### B5 — `QrGeneratorScreen` list key can collide on a duplicate random value · Low · Confirmed · ✅ Fixed in 0.4.8
 - **Where:** `QrGeneratorScreen` — `items(items = codes, key = { it.value })`.
@@ -260,6 +262,7 @@ JVM-only, see the coverage section).
 | `TimeChangePolicyTest` | Which broadcasts re-arm alarms on a timezone / clock change (B11) |
 | `QrCodeGeneratorTest` | QR code id uniqueness + value dedupe (B5) |
 | `EmergencyGamePolicyTest` | Emergency mini-game: complete-once, tap gate, idle timeout, lit-cell move (B6/C1) |
+| `AlarmPersistenceTest` | **Robolectric + in-memory Room**: `saveAlarm` atomicity, ordered steps, step replacement, CASCADE delete, barcode-in-use guard (B4/C3) |
 | `AwakeCheckPolicyTest` | Awake-check intervals, dismiss transitions, stale-timeout guard |
 | `AlarmSessionTest` | Session start + final-step pin for miss re-ring |
 | `NextRingFormatterTest` | "Rings in …" formatting + a few scheduler paths (non-DST) |
@@ -274,10 +277,12 @@ Android-free objects (`ScanValidator`, `AwakeCheckPolicy`, `WeekdayOrder`,
 are mostly **logic that hasn't been extracted yet** and **layers CI can't reach**.
 
 ### The structural gap
-CI runs `testDebugUnitTest` only — **pure JVM**. There are **no instrumented
-(`androidTest`) tests and no Robolectric**, so nothing exercises Room migrations,
-DAOs, the `AlarmService` state machine end-to-end, PendingIntent wiring, or any
-Composable. Anything needing an Android runtime is currently unverified.
+CI runs `testDebugUnitTest` only. As of 0.5.0 **Robolectric is stood up** in that same
+JVM lane (`AlarmPersistenceTest`), so Room DAOs/transactions are now exercised without an
+emulator. Still uncovered: Room **migrations** (needs `exportSchema` + committed schema
+JSONs — a separate TODO; the current test uses a fresh in-memory DB at the latest version),
+the `AlarmService` state machine end-to-end, PendingIntent wiring, and any Composable.
+There are still no instrumented (`androidTest`) tests.
 
 ### Proposed new coverage (prioritised)
 
@@ -287,19 +292,20 @@ Composable. Anything needing an Android runtime is currently unverified.
 | **C1** ✅ | Emergency mini-game rules (complete-once, tap gate, idle timeout, lit-cell move) | `EmergencyGamePolicyTest` — done in 0.4.8 with B6 | JVM | B6 done |
 | **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (done in 0.4.6 with B2) | JVM | B2 done; B3 still open |
 | **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
-| **C3** | Room: migrations 1→2→3→4 and `saveAlarm` atomicity + `usageCount`/RESTRICT delete guard | `androidTest` with in-memory DB (or Robolectric) — needs new test infra | Instrumented | B4 |
+| **C3** ◑ | Room: `saveAlarm` atomicity + CASCADE + `usageCount` guard **done** (`AlarmPersistenceTest`, Robolectric, 0.5.0); migrations 1→2→3→4 **still open** (needs `exportSchema` + committed schema JSONs) | Robolectric / JVM | B4 done |
 | **C6** | `NumberStepperField` clamping / empty-field / round-trip behaviour | Extract the text↔value normalisation into a pure helper and unit-test; optional Compose UI test | JVM (+ optional UI) | — |
 | **C7** | `AlarmService` state machine (ring → scan → step → complete → awake → miss re-ring) | Instrumented or a refactor that drives the transitions through a pure reducer | Instrumented / refactor | B1, B2, B3 |
 | **C8** | Compose smoke tests (list renders, toggle persists, editor saves, day bubbles fit) | `androidTest` with Compose test rule — needs new test infra | Instrumented | — |
 
-### Infrastructure to add before the instrumented rows are possible
-- A `src/androidTest` source set + `androidTestImplementation` deps
-  (`androidx.test`, `room-testing`, `compose-ui-test-junit4`), **or** Robolectric
-  for JVM-hosted Android tests.
-- A CI job (or step) that runs them — today's workflow only runs
-  `testDebugUnitTest`. Instrumented tests need an emulator on CI (slower) or a
-  Robolectric path (JVM, keeps CI fast). Recommend Robolectric for the Room/DAO
-  and migration coverage (C3) so it stays in the existing fast lane.
+### Infrastructure
+- **Robolectric is now wired up** (0.5.0): `org.robolectric:robolectric` +
+  `androidx.test:core` on `testImplementation`, `testOptions.unitTests.isIncludeAndroidResources`,
+  and it runs in the existing `testDebugUnitTest` step — no emulator, no workflow change. This
+  is the fast lane for anything needing an Android runtime (Room, and a future `AlarmService`
+  reducer). Use it before reaching for an emulator.
+- **Still to add:** for the migration half of C3, enable Room `exportSchema` + commit the schema
+  JSONs (a build step generates them), then `androidx.room:room-testing`'s `MigrationTestHelper`.
+  Compose UI smoke tests (C8) would want `compose-ui-test-junit4` (Robolectric can host these too).
 
 ### Device-only behaviours to verify (no JVM coverage possible)
 - **Direct Boot (v0.4.1):** alarm fires on the lock screen after a reboot without a
@@ -324,7 +330,10 @@ Composable. Anything needing an Android runtime is currently unverified.
 
 ### Cheapest high-value next steps
 1. ~~**C2** (scheduler DST)~~ — done in 0.4.7 (B9 verified correct; B11 receiver added).
-2. **C5 + B1** (foreground-start decision) — B1 is already fixed via `ServiceStartPolicy`;
-   the remaining value is extracting the keep-foreground-vs-stop decision as a pure test.
-3. ~~**C1 + B6** (emergency policy extract)~~ — done in 0.4.8 (`EmergencyGamePolicy`).
-4. Stand up Robolectric once, then land **C3** (Room migrations/atomicity, unblocks B4).
+2. ~~**C1 + B6** (emergency policy extract)~~ — done in 0.4.8 (`EmergencyGamePolicy`).
+3. ~~Stand up Robolectric + **C3** atomicity/CASCADE (B4)~~ — done in 0.5.0
+   (`AlarmPersistenceTest`). Remaining C3: enable `exportSchema` and add migration tests.
+4. **B3** (awake-check ↔ second-alarm collision) — extend `AlarmAdmissionPolicy` to the
+   awake-check timeline; the only functional bug still open.
+5. Optional pure extracts still on the board: **C5** (foreground-start keep-vs-stop decision)
+   and **C6** (`NumberStepperField` normalisation).
