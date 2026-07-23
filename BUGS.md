@@ -2,9 +2,9 @@
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
 the whole codebase (first pass at v0.4.0; kept current since). Fixed / verified
-entries are marked **✅** inline (B1, B2, B4, B5, B6, B7, B8, B9, B10, B11 so far);
-everything else is the "document now, fix later" ledger. Each entry says where it is,
-what goes wrong, why, a proposed fix, and how we'd test it.
+entries are marked **✅** inline — as of 0.5.1 **every listed bug (B1–B11) is fixed or
+resolved**. The rest of this file is the test-coverage audit. Each bug entry says where it
+was, what went wrong, why, the fix, and how it was tested.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -69,24 +69,27 @@ JVM-only, see the coverage section).
   without an active alarm), and the defer-time arithmetic. End-to-end two-alarm
   collision remains device/instrumented-only. This is coverage gap **C4**.
 
-### B3 — Awake-check re-ring interacts badly with a second alarm / recurring reschedule · Medium · Needs-device
-- **Where:** `AlarmService.completeRoutine` (`AlarmService.kt:208-237`),
-  `handleAwakeCheckTimeout` (`AlarmService.kt:321-347`).
-- **What:** After the final scan, `completeRoutine` reschedules a recurring alarm
-  for its *next* occurrence **and** starts the awake-check cycle. If an awake check
-  is later missed, `handleAwakeCheckTimeout` re-rings by pinning `AlarmSession` at
-  the last step. During that awake-check window (session cleared, checks pending)
-  a *different* alarm firing, or the same alarm's next occurrence arriving, can
-  interleave with the pending checks. Same single-session root cause as B2, but the
-  awake-check timeline widens the window to 10–30 min.
-- **Why:** Awake-check state (Room + AlarmManager) is per-alarm, but the ringing
-  session is a singleton, so overlapping timelines aren't reconciled.
-- **Proposed fix:** Extend B2's `AlarmAdmissionPolicy` (0.4.6) to the awake-check
-  timeline; explicitly define what happens when an awake check and a fresh ring
-  collide (the admission policy currently only guards the ringing session, not a
-  pending awake check).
-- **How to test:** Model the timeline transitions as pure state and unit-test the
-  collision cases; full confidence needs an instrumented/manual run.
+### B3 — Awake-check re-ring interacts badly with a second alarm / recurring reschedule · Medium · Confirmed · ✅ Fixed in 0.5.1
+- **Where:** `AlarmService.handleAwakeCheckTimeout` / `handleAwakeCheckShow`.
+- **What:** The awake-check cycle runs with the ringing session cleared, so its 10–30 min
+  timeline can overlap a *different* alarm firing. The miss re-ring called
+  `AlarmSession.start(...)` **directly**, bypassing the admission policy — so if another
+  alarm was ringing when a check was missed, the re-ring **clobbered that alarm's session**
+  (the exact B2 harm, on the awake-check path). Separately, an awake-check popup could pop
+  its gentle cue *over* a blaring alarm.
+- **Why:** Awake-check state (Room + AlarmManager) is per-alarm, but the ringing session is a
+  singleton, and the awake-check handlers didn't consult the admission policy.
+- **Fix (0.5.1):** Both awake-check events now go through `AlarmAdmissionPolicy`:
+  - **Miss re-ring** (`decideAwakeCheckReRing`): `RE_RING` when nothing's ringing;
+    **`DEFER`** (re-arm the miss deadline forward, keep the row) when a *different* alarm is
+    ringing so it isn't clobbered; `ALREADY_RINGING` (drop the stale check) when this alarm is
+    already ringing (its next occurrence fired during the wait).
+  - **Popup show** (`deferAwakeCheckShow`): if any alarm is ringing, re-arm the show for later
+    instead of stacking over it; `AwakeCheckActivity` also self-finishes if `AlarmSession` is
+    active, so the receiver's parallel launch never flashes over the ring.
+- **How it was tested:** `AlarmAdmissionPolicyTest` — the re-ring decision (re-ring / defer /
+  already-ringing) and the show-defer rule. The end-to-end interleave is still best confirmed
+  on a device, but the collision decisions are now pinned in pure logic.
 
 ### B4 — `saveAlarm` isn't atomic across the alarm row and its steps · Medium · Confirmed · ✅ Fixed in 0.5.0
 - **Where:** `Repository.saveAlarm` → `AlarmDao` (`app/src/main/java/com/worstalarm/clock/data/`).
@@ -257,7 +260,7 @@ JVM-only, see the coverage section).
 | Suite | Covers |
 |---|---|
 | `ScanValidatorTest` | Duplicate-frame / reused-barcode scan decisions |
-| `AlarmAdmissionPolicyTest` | Single-session admission: ring / re-ring / defer / invalid (B2) |
+| `AlarmAdmissionPolicyTest` | Single-session admission: ring / re-ring / defer / invalid (B2) + awake-check collision rules (B3) |
 | `AlarmSchedulerNextTriggerTest` | `computeNextTriggerMs` DST (spring-forward / fall-back), exact-minute boundary, weekday wrap (B9/C2) |
 | `TimeChangePolicyTest` | Which broadcasts re-arm alarms on a timezone / clock change (B11) |
 | `QrCodeGeneratorTest` | QR code id uniqueness + value dedupe (B5) |
@@ -290,7 +293,7 @@ There are still no instrumented (`androidTest`) tests.
 |---|---|---|---|---|
 | **C2** ✅ | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | `AlarmSchedulerNextTriggerTest` — fixed `Calendar` + `America/New_York` spring-forward & fall-back, `candidate == now`, weekday wrap (done 0.4.7 with B9) | JVM | B9 done |
 | **C1** ✅ | Emergency mini-game rules (complete-once, tap gate, idle timeout, lit-cell move) | `EmergencyGamePolicyTest` — done in 0.4.8 with B6 | JVM | B6 done |
-| **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (done in 0.4.6 with B2) | JVM | B2 done; B3 still open |
+| **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (B2, 0.4.6) + awake-check collision rules (B3, 0.5.1) | JVM | B2 & B3 done |
 | **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
 | **C3** ◑ | Room: `saveAlarm` atomicity + CASCADE + `usageCount` guard **done** (`AlarmPersistenceTest`, Robolectric, 0.5.0); migrations 1→2→3→4 **still open** (needs `exportSchema` + committed schema JSONs) | Robolectric / JVM | B4 done |
 | **C6** | `NumberStepperField` clamping / empty-field / round-trip behaviour | Extract the text↔value normalisation into a pure helper and unit-test; optional Compose UI test | JVM (+ optional UI) | — |
@@ -333,7 +336,8 @@ There are still no instrumented (`androidTest`) tests.
 2. ~~**C1 + B6** (emergency policy extract)~~ — done in 0.4.8 (`EmergencyGamePolicy`).
 3. ~~Stand up Robolectric + **C3** atomicity/CASCADE (B4)~~ — done in 0.5.0
    (`AlarmPersistenceTest`). Remaining C3: enable `exportSchema` and add migration tests.
-4. **B3** (awake-check ↔ second-alarm collision) — extend `AlarmAdmissionPolicy` to the
-   awake-check timeline; the only functional bug still open.
-5. Optional pure extracts still on the board: **C5** (foreground-start keep-vs-stop decision)
-   and **C6** (`NumberStepperField` normalisation).
+4. ~~**B3** (awake-check ↔ second-alarm collision)~~ — done in 0.5.1 (admission policy extended
+   to the awake-check timeline). **The B1–B11 audit is fully closed.**
+5. What's left is coverage, not bugs: Room **migration** tests (needs `exportSchema`), an
+   `AlarmService` state-machine test (**C7**), Compose smoke tests (**C8**), and the small pure
+   extracts **C5** (foreground-start keep-vs-stop) and **C6** (`NumberStepperField`).

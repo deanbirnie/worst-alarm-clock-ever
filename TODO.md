@@ -268,16 +268,15 @@ things only when they're verified working.
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > **Bugs and test-coverage gaps now live in [BUGS.md](BUGS.md)** — that's the single
-> source of truth for them. As of v0.5.0, resolved: **B1** (stuck foreground service,
-> 0.4.3), **B2** (a second alarm clobbering the first, 0.4.6), **B4** (`saveAlarm`
-> atomicity, 0.5.0), **B5** (QR list-key crash, 0.4.8), **B6** (emergency complete-once,
-> 0.4.8), **B7** (dropped redundant `SCHEDULE_EXACT_ALARM`, 0.4.9), **B8** (mediaPlayback
-> FGS type — re-assessed, no change, 0.4.9), **B9** (scheduler DST/exact-minute — verified
-> correct, 0.4.7), **B10** (awake-check "I'm awake" no-op, 0.4.5), and **B11** (timezone /
-> clock-change re-arm, 0.4.7). **Only B3 is still open.** **Robolectric is now stood up**
-> (C1, C2, C3-atomicity, C4 have landed); the remaining coverage gaps are an `AlarmService`
-> state-machine test, Compose smoke tests, and Room migration tests. Work the bugs and
-> coverage from BUGS.md; the items below are the remaining **feature/hardening** work.
+> source of truth for them. As of v0.5.1, **the whole B1–B11 audit is closed**: B1 (stuck
+> foreground service, 0.4.3), B2 (a second alarm clobbering the first, 0.4.6), B3 (awake-check
+> ↔ second-alarm collision, 0.5.1), B4 (`saveAlarm` atomicity, 0.5.0), B5 (QR list-key crash,
+> 0.4.8), B6 (emergency complete-once, 0.4.8), B7 (dropped redundant `SCHEDULE_EXACT_ALARM`,
+> 0.4.9), B8 (mediaPlayback FGS type — re-assessed, 0.4.9), B9 (scheduler DST — verified,
+> 0.4.7), B10 (awake-check "I'm awake" no-op, 0.4.5), B11 (timezone / clock-change re-arm,
+> 0.4.7). **Robolectric is stood up** (C1, C2, C3-atomicity, C4 landed); what's left is
+> coverage, not bugs — an `AlarmService` state-machine test, Compose smoke tests, and Room
+> migration tests. The items below are the remaining **feature/hardening** work.
 
 - [ ] Enable Room `exportSchema` + committed schema JSON, adopt real migrations
       (required before first public release; unblocks the migration half of BUGS.md C3 —
