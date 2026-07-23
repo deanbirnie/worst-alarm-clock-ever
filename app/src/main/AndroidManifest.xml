@@ -4,7 +4,13 @@
 
     <!-- Alarm scheduling -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- USE_EXACT_ALARM (API 33+, install-granted) marks this as a genuine alarm-clock app.
+         Scheduling itself goes through AlarmManager.setAlarmClock, which is already exempt from
+         the exact-alarm permission — but USE_EXACT_ALARM also keeps the app classified as an alarm
+         app, which is what auto-grants USE_FULL_SCREEN_INTENT on Android 14 (the ringing screen
+         depends on that). We deliberately do NOT declare the older SCHEDULE_EXACT_ALARM: it's
+         user-revocable, denied-by-default on 14, and redundant here since setAlarmClock never needs
+         it and USE_EXACT_ALARM supersedes it on 33+. (B7) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
