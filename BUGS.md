@@ -1,10 +1,10 @@
 # Bug backlog & test-coverage audit
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
-the whole codebase (first pass at v0.4.0; kept current since). Fixed entries are
-marked **✅** inline (B1, B2, and B10 so far); everything else is the "document
-now, fix later" ledger. Each entry says where it is, what goes wrong, why, a
-proposed fix, and how we'd test it.
+the whole codebase (first pass at v0.4.0; kept current since). Fixed / verified
+entries are marked **✅** inline (B1, B2, B9, B10, B11 so far); everything else is
+the "document now, fix later" ledger. Each entry says where it is, what goes wrong,
+why, a proposed fix, and how we'd test it.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -153,19 +153,26 @@ JVM-only, see the coverage section).
   ringing. Confirm on a real device.
 - **How to test:** Device/instrumented; not unit-testable.
 
-### B9 — Scheduler DST / weekday-mask correctness is assumed, not proven · Medium · Needs-device (logic is unit-testable)
+### B9 — Scheduler DST / weekday-mask correctness is assumed, not proven · Medium · ✅ Verified in 0.4.7 (no defect found)
 - **Where:** `AlarmScheduler.computeNextTriggerMs` (`AlarmScheduler.kt`).
 - **What:** This is the single most safety-critical function (it decides when you
-  wake up) and its trickiest cases are **unverified**: a spring-forward morning
+  wake up) and its trickiest cases were **unverified**: a spring-forward morning
   where the alarm's wall-clock time doesn't exist, a fall-back morning where it
   happens twice, and the exact-minute boundary (`candidate == now`). The existing
-  `NextRingFormatterTest` deliberately uses July dates to *avoid* DST, so DST is a
-  genuine hole, not just untested-by-omission.
-- **Why:** No tests target these branches.
-- **Proposed fix:** No code change until tests exist — first pin the current
-  behaviour, then decide if any of it is wrong.
-- **How to test:** See coverage gap **C2** — it's pure and JVM-testable with a
-  fixed `Calendar`/timezone.
+  `NextRingFormatterTest` deliberately uses July dates to *avoid* DST, so DST was a
+  genuine hole.
+- **Outcome (0.4.7):** Added `AlarmSchedulerNextTriggerTest` (coverage gap **C2**),
+  which pins the current behaviour — and it is **correct**, so no code change was
+  needed: an alarm armed the day before a DST transition still fires at the intended
+  **wall-clock** time the morning after (verified in `America/New_York` across both
+  the March spring-forward and November fall-back); `candidate == now` correctly rolls
+  forward (a one-shot to tomorrow, a weekly to next week) rather than re-firing
+  instantly; and the weekday mask wraps to the next enabled day. The one inherently
+  ambiguous case — an alarm set *inside* the nonexistent spring-forward hour — is
+  asserted only to return a real, future, same-morning time (never null/past), since
+  resolving a wall-clock time that doesn't exist is lenient-`Calendar` defined.
+- **Related:** a timezone/clock change *while an alarm is armed* is a separate gap —
+  see **B11** (fixed 0.4.7).
 
 ### B10 — "I'm awake" did nothing when the popup was launched from the notification/lock screen · High · Confirmed · ✅ Fixed in 0.4.5
 - **Where:** `AwakeCheckActivity` (`app/src/main/java/com/worstalarm/clock/alarm/AwakeCheckActivity.kt`)
@@ -192,28 +199,31 @@ JVM-only, see the coverage section).
   intent fallback, both-invalid → -1). End-to-end surfacing still needs a device
   (see the device list below).
 
-### B11 — Armed alarms aren't re-armed on a timezone / manual clock change · Medium · Confirmed
-- **Where:** `AndroidManifest.xml` (there is no time/timezone receiver); alarms are
+### B11 — Armed alarms aren't re-armed on a timezone / manual clock change · Medium · Confirmed · ✅ Fixed in 0.4.7
+- **Where:** `AndroidManifest.xml` (there was no time/timezone receiver); alarms were
   only ever re-armed by `BootReceiver` (`BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` /
   `MY_PACKAGE_REPLACED`) and at save time.
 - **What:** `AlarmScheduler` arms each alarm with `AlarmManager.setAlarmClock` at an
   **absolute instant** computed from the wall-clock time and timezone in effect *when it
   was armed*. If the user later changes timezone (travel) or sets the system clock, that
   pinned instant no longer matches the intended local time — the alarm fires at the old
-  offset, which can be hours early or late. Nothing listens for
+  offset, which can be hours early or late. Nothing listened for
   `ACTION_TIMEZONE_CHANGED` / `ACTION_TIME_CHANGED` to recompute and re-arm, and a
-  timezone change doesn't reboot, so the boot re-arm path never runs.
-- **Why:** Re-arming is tied to boot / package-replace / explicit save only; there is no
-  time- or timezone-change receiver.
-- **Proposed fix:** Add a `directBootAware` receiver for `ACTION_TIMEZONE_CHANGED` (and
-  `ACTION_TIME_CHANGED`) that re-arms all enabled alarms through the same path
-  `BootReceiver` uses. (A single armed alarm that merely *crosses* a DST boundary is
-  already resolved to the correct instant by `Calendar` at compute time — the gap here is
-  a genuine timezone/manual-clock change. DST *logic* correctness inside
-  `computeNextTriggerMs` is tracked separately in **B9**.)
-- **How to test:** The re-arm fan-out (enabled alarms → re-arm requests) is the same pure
-  logic BootReceiver drives and is JVM-testable; the receiver actually firing on a
-  timezone change is device-only.
+  timezone change doesn't reboot, so the boot re-arm path never ran.
+- **Why:** Re-arming was tied to boot / package-replace / explicit save only; there was
+  no time- or timezone-change receiver.
+- **Fix (0.4.7):** New `directBootAware` `TimeChangeReceiver` listens for
+  `ACTION_TIMEZONE_CHANGED` and `ACTION_TIME_CHANGED` (both protected system broadcasts a
+  manifest receiver may still receive) and re-arms every enabled alarm via the same
+  `AlarmScheduler.rescheduleAll` path `BootReceiver` uses. The which-actions decision is a
+  pure, unit-tested `TimeChangePolicy`. (A single armed alarm that merely *crosses* a DST
+  boundary is already resolved correctly by `Calendar` — verified in **B9**; this covers
+  the distinct timezone/manual-clock change. Awake-check windows are short-lived and left
+  out of scope.)
+- **How it was tested:** `TimeChangePolicyTest` (JVM) pins which actions re-arm (timezone
+  + clock change) and which don't (null / boot / `TIME_TICK`). The re-arm fan-out reuses
+  `rescheduleAll` (shared with the boot path); the receiver actually firing on a real
+  timezone change is device-only (see the device list).
 
 ---
 
@@ -223,6 +233,9 @@ JVM-only, see the coverage section).
 | Suite | Covers |
 |---|---|
 | `ScanValidatorTest` | Duplicate-frame / reused-barcode scan decisions |
+| `AlarmAdmissionPolicyTest` | Single-session admission: ring / re-ring / defer / invalid (B2) |
+| `AlarmSchedulerNextTriggerTest` | `computeNextTriggerMs` DST (spring-forward / fall-back), exact-minute boundary, weekday wrap (B9/C2) |
+| `TimeChangePolicyTest` | Which broadcasts re-arm alarms on a timezone / clock change (B11) |
 | `AwakeCheckPolicyTest` | Awake-check intervals, dismiss transitions, stale-timeout guard |
 | `AlarmSessionTest` | Session start + final-step pin for miss re-ring |
 | `NextRingFormatterTest` | "Rings in …" formatting + a few scheduler paths (non-DST) |
@@ -246,7 +259,7 @@ Composable. Anything needing an Android runtime is currently unverified.
 
 | # | Gap | Proposed test | Type | Unblocks |
 |---|---|---|---|---|
-| **C2** | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | Pure JVM tests with fixed `Calendar` + explicit `TimeZone` (incl. a DST zone like `America/New_York` around Mar/Nov), asserting spring-forward, fall-back, `candidate == now`, and "next enabled weekday" wrap | JVM | B9 |
+| **C2** ✅ | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | `AlarmSchedulerNextTriggerTest` — fixed `Calendar` + `America/New_York` spring-forward & fall-back, `candidate == now`, weekday wrap (done 0.4.7 with B9) | JVM | B9 done |
 | **C1** | Emergency mini-game rules (idle reset counting, complete-once, alarm-stays-on after N idles) | Extract a pure `EmergencyGamePolicy` (taps, idle, resets → state) and unit-test it | JVM | B6 |
 | **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (done in 0.4.6 with B2) | JVM | B2 done; B3 still open |
 | **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
@@ -276,11 +289,16 @@ Composable. Anything needing an Android runtime is currently unverified.
   full-screen intent only *auto-launches* full-screen while the screen is locked/off; when
   the screen is already on it surfaces as a heads-up the user taps. Reproduce: alarm →
   scan through → let the phone sleep → wait for the awake check.
+- **Timezone / clock-change re-arm (v0.4.7, B11):** change the phone's timezone (or set the
+  clock forward) while an alarm is armed and confirm `TimeChangeReceiver` re-arms it so it
+  still fires at the intended local time. Reproduce: arm an alarm a couple hours out → change
+  the system timezone → check the next-alarm time.
 - B7 (redundant exact-alarm permissions) and B8 (mediaPlayback FGS type) from above.
 
 ### Cheapest high-value next steps
-1. **C2** (scheduler DST) — pure, highest safety value, no new infra.
-2. **C5 + B1** (foreground-start decision) — tiny extract, kills a real stuck-state bug.
+1. ~~**C2** (scheduler DST)~~ — done in 0.4.7 (B9 verified correct; B11 receiver added).
+2. **C5 + B1** (foreground-start decision) — B1 is already fixed via `ServiceStartPolicy`;
+   the remaining value is extracting the keep-foreground-vs-stop decision as a pure test.
 3. **C1 + B6** (emergency policy extract) — removes the last untested piece of the
    disarm path.
-4. Stand up Robolectric once, then land **C3** (Room migrations/atomicity).
+4. Stand up Robolectric once, then land **C3** (Room migrations/atomicity, unblocks B4).
