@@ -113,14 +113,36 @@ class AlarmService : Service() {
     }
 
     private fun handleRing(alarmId: Long) {
-        if (alarmId <= 0) { stopSelfSafely(); return }
-        // If we're already ringing this alarm (duplicate intent), just re-ring current step.
-        val existing = AlarmSession.state.value
-        if (existing != null && existing.alarmWithSteps.alarm.id == alarmId) {
-            ringCurrentStep()
-            return
-        }
+        // Exactly one alarm can own the ringing session. AlarmAdmissionPolicy is the unit-tested
+        // source of truth for what happens when a ring arrives while one is (or isn't) already
+        // active — critically, a *different* alarm must not clobber the one the user is currently
+        // dealing with (B2).
+        val activeId = AlarmSession.state.value?.alarmWithSteps?.alarm?.id
+        when (AlarmAdmissionPolicy.decide(activeId, alarmId)) {
+            AlarmAdmissionPolicy.Decision.INVALID ->
+                // Bogus ring with no valid id. If something is already ringing, leave it be;
+                // otherwise there's nothing to do, so don't sit in the foreground (B1).
+                if (activeId == null) stopSelfSafely()
 
+            AlarmAdmissionPolicy.Decision.RERING_CURRENT ->
+                // Duplicate delivery of the alarm already ringing — just re-ring the current step.
+                ringCurrentStep()
+
+            AlarmAdmissionPolicy.Decision.DEFER_INCOMING ->
+                // A different alarm owns the session. Don't overwrite it (that was B2): re-arm
+                // this one shortly so it rings once the active alarm is done, instead of being
+                // silently dropped. The active alarm's ring is left completely untouched.
+                AlarmScheduler.scheduleRingAt(
+                    this, alarmId, AlarmAdmissionPolicy.deferUntilMs(System.currentTimeMillis())
+                )
+
+            AlarmAdmissionPolicy.Decision.RING_NEW ->
+                startRinging(alarmId)
+        }
+    }
+
+    /** Loads the alarm, claims the session, and starts ringing. Only called when nothing is active. */
+    private fun startRinging(alarmId: Long) {
         val app = application as WorstAlarmApp
         serviceScope.launch {
             val alarm = withIO { app.repository.getAlarm(alarmId) }
