@@ -333,6 +333,15 @@ class AlarmService : Service() {
         val dismissedCount = intent.getIntExtra(EXTRA_DISMISSED_COUNT, 0)
         if (alarmId <= 0) { stopSelfSafely(); return }
 
+        // B3: if a different alarm is ringing right now, don't stack this gentle popup + nudge
+        // over it — re-arm the show for a bit later. (AwakeCheckActivity self-finishes over a live
+        // ring too, so the receiver's parallel launch doesn't flash on screen.)
+        val activeId = AlarmSession.state.value?.alarmWithSteps?.alarm?.id
+        if (AlarmAdmissionPolicy.deferAwakeCheckShow(activeId)) {
+            reArmAwakeCheckShow(alarmId, dismissedCount)
+            return
+        }
+
         // Set synchronously so the activity (already being launched by AlarmReceiver) has
         // something to show without waiting on the DB round-trip below.
         AwakeCheckSession.show(alarmId, dismissedCount + 1)
@@ -454,6 +463,22 @@ class AlarmService : Service() {
         }
     }
 
+    /** B3: an alarm is ringing, so re-arm this awake-check popup for a bit later instead of over it. */
+    private fun reArmAwakeCheckShow(alarmId: Long, dismissedCount: Int) {
+        serviceScope.launch {
+            val app = application as WorstAlarmApp
+            val row = withIO { app.repository.getAwakeCheck(alarmId) }
+            if (row != null) {
+                val nextAt = AlarmAdmissionPolicy.deferUntilMs(System.currentTimeMillis())
+                withIO {
+                    app.repository.saveAwakeCheck(row.copy(nextCheckAtMs = nextAt, popupDeadlineAtMs = 0L))
+                }
+                AlarmScheduler.scheduleAwakeCheck(this@AlarmService, alarmId, nextAt, dismissedCount)
+            }
+            stopSelfSafely()
+        }
+    }
+
     /** A shown popup's dismiss deadline expired — verify it's genuine, then re-ring. */
     private fun handleAwakeCheckTimeout(intent: Intent) {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
@@ -470,16 +495,39 @@ class AlarmService : Service() {
                 return@launch
             }
 
-            withIO { app.repository.clearAwakeCheck(alarmId) }
-            AwakeCheckSession.clear()
+            // B3: the miss re-rings the alarm — but a *different* alarm ringing right now must win,
+            // or AlarmSession.start() below would clobber its session (the B2 harm on this path).
+            val activeId = AlarmSession.state.value?.alarmWithSteps?.alarm?.id
+            when (AlarmAdmissionPolicy.decideAwakeCheckReRing(activeId, alarmId)) {
+                AlarmAdmissionPolicy.AwakeReRing.DEFER -> {
+                    // Keep the check; push its miss deadline forward and re-arm so it retries the
+                    // re-ring once the other alarm is done (each retry defers again if still busy).
+                    val nextDeadline = AlarmAdmissionPolicy.deferUntilMs(System.currentTimeMillis())
+                    withIO { app.repository.saveAwakeCheck(row.copy(popupDeadlineAtMs = nextDeadline)) }
+                    AwakeCheckSession.clear()
+                    AlarmScheduler.scheduleAwakeCheckTimeout(this@AlarmService, alarmId, nextDeadline)
+                    stopSelfSafely()
+                }
+                AlarmAdmissionPolicy.AwakeReRing.ALREADY_RINGING -> {
+                    // This alarm is already ringing (e.g. its next occurrence fired during the
+                    // wait) — the stale check's re-ring is redundant. Drop it.
+                    withIO { app.repository.clearAwakeCheck(alarmId) }
+                    AwakeCheckSession.clear()
+                    stopSelfSafely()
+                }
+                AlarmAdmissionPolicy.AwakeReRing.RE_RING -> {
+                    withIO { app.repository.clearAwakeCheck(alarmId) }
+                    AwakeCheckSession.clear()
 
-            val alarm = withIO { app.repository.getAlarm(alarmId) }
-            if (alarm == null || alarm.orderedSteps.isEmpty()) { stopSelfSafely(); return@launch }
+                    val alarm = withIO { app.repository.getAlarm(alarmId) }
+                    if (alarm == null || alarm.orderedSteps.isEmpty()) { stopSelfSafely(); return@launch }
 
-            customToneUri = alarm.alarm.ringtoneUri
-                ?: withIO { app.settings.globalRingtoneUri.first() }
-            AlarmSession.start(alarm, startAtStepIndex = alarm.orderedSteps.size - 1)
-            ringCurrentStep()
+                    customToneUri = alarm.alarm.ringtoneUri
+                        ?: withIO { app.settings.globalRingtoneUri.first() }
+                    AlarmSession.start(alarm, startAtStepIndex = alarm.orderedSteps.size - 1)
+                    ringCurrentStep()
+                }
+            }
         }
     }
 

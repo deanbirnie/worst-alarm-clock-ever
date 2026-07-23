@@ -29,6 +29,11 @@ class AwakeCheckActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // B3: never surface the awake-check popup over a live alarm. If a (different) alarm is
+        // ringing, the service defers this check; the receiver launches us in parallel, so bail
+        // here too rather than flash the popup over the ringing screen.
+        if (AlarmSession.isActive) { finish(); return }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)

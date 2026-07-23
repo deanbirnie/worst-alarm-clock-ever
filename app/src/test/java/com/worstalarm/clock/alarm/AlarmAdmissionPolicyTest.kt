@@ -1,6 +1,7 @@
 package com.worstalarm.clock.alarm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -62,5 +63,39 @@ class AlarmAdmissionPolicyTest {
         // A non-positive interval would re-fire immediately and busy-loop against the active alarm.
         assertTrue(AlarmAdmissionPolicy.DEFER_RETRY_MS > 0L)
         assertTrue(AlarmAdmissionPolicy.deferUntilMs(0L) > 0L)
+    }
+
+    // ---- B3: awake-check timeline collisions ----
+
+    @Test
+    fun `a missed check re-rings when nothing else is ringing`() {
+        assertEquals(
+            AlarmAdmissionPolicy.AwakeReRing.RE_RING,
+            AlarmAdmissionPolicy.decideAwakeCheckReRing(activeAlarmId = null, awakeAlarmId = 5L)
+        )
+    }
+
+    @Test
+    fun `a missed check defers rather than clobber a different ringing alarm`() {
+        // The B3 fix: the miss re-ring must not overwrite alarm 9's live session.
+        assertEquals(
+            AlarmAdmissionPolicy.AwakeReRing.DEFER,
+            AlarmAdmissionPolicy.decideAwakeCheckReRing(activeAlarmId = 9L, awakeAlarmId = 5L)
+        )
+    }
+
+    @Test
+    fun `a missed check for the alarm already ringing is dropped, not double-started`() {
+        assertEquals(
+            AlarmAdmissionPolicy.AwakeReRing.ALREADY_RINGING,
+            AlarmAdmissionPolicy.decideAwakeCheckReRing(activeAlarmId = 5L, awakeAlarmId = 5L)
+        )
+    }
+
+    @Test
+    fun `the awake-check popup is deferred whenever any alarm is ringing, shown when none is`() {
+        assertTrue(AlarmAdmissionPolicy.deferAwakeCheckShow(activeAlarmId = 9L))
+        assertTrue(AlarmAdmissionPolicy.deferAwakeCheckShow(activeAlarmId = 5L))
+        assertFalse(AlarmAdmissionPolicy.deferAwakeCheckShow(activeAlarmId = null))
     }
 }
