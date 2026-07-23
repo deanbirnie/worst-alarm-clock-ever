@@ -60,6 +60,26 @@ object AlarmScheduler {
     }
 
     /**
+     * Re-arms a plain alarm ring (routine step 0) at [triggerAtMs], reusing the alarm's normal
+     * ACTION_FIRE PendingIntent. Used to *defer* an alarm that fired while a different one was
+     * already ringing (see [AlarmAdmissionPolicy]) so it isn't silently lost — it re-fires once
+     * the active alarm is done. Safe to reuse the schedule PendingIntent: the alarm's own
+     * one-shot occurrence has already been consumed by the fire that triggered this, and a
+     * recurring alarm isn't re-armed for its next occurrence until it completes.
+     */
+    fun scheduleRingAt(context: Context, alarmId: Long, triggerAtMs: Long) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val pi = pendingIntentFor(context, alarmId, create = true) ?: return
+        val showIntent = PendingIntent.getActivity(
+            context,
+            alarmId.toInt(),
+            Intent(context, MainActivity::class.java),
+            pendingIntentFlags()
+        )
+        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMs, showIntent), pi)
+    }
+
+    /**
      * Arms the ring for the NEXT routine step at [triggerAtMs]. Uses setAlarmClock —
      * not Handler.postDelayed — because a Handler's uptime clock pauses in deep sleep:
      * with the screen off, the ring would silently wait until the user woke the phone.

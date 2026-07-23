@@ -268,12 +268,13 @@ things only when they're verified working.
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > **Bugs and test-coverage gaps now live in [BUGS.md](BUGS.md)** — that's the single
-> source of truth for them. As of v0.4.5: **B1** (stuck foreground service, 0.4.3) and
-> **B10** (awake-check "I'm awake" no-op, 0.4.5) are ✅ fixed; **B2–B9** and **B11**
-> (timezone / clock-change re-arm) are open; coverage gaps **C1–C8** — scheduler-DST
-> tests, an `AlarmService` state-machine test, Compose smoke tests, and the
-> Robolectric/instrumented infra those need — are catalogued there too. Work the bugs
-> and coverage from BUGS.md; the items below are the remaining **feature/hardening** work.
+> source of truth for them. As of v0.4.6: **B1** (stuck foreground service, 0.4.3),
+> **B2** (a second alarm clobbering the first, 0.4.6), and **B10** (awake-check "I'm
+> awake" no-op, 0.4.5) are ✅ fixed; **B3–B9** and **B11** (timezone / clock-change
+> re-arm) are open; coverage gaps **C1–C8** — scheduler-DST tests, an `AlarmService`
+> state-machine test, Compose smoke tests, and the Robolectric/instrumented infra those
+> need — are catalogued there too (C4 landed with B2). Work the bugs and coverage from
+> BUGS.md; the items below are the remaining **feature/hardening** work.
 
 - [ ] Enable Room `exportSchema` + committed schema JSON, adopt real migrations
       (required before first public release; migration atomicity is BUGS.md C3/B4)

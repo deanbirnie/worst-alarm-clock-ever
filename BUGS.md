@@ -2,9 +2,9 @@
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
 the whole codebase (first pass at v0.4.0; kept current since). Fixed entries are
-marked **✅** inline (B1 and B10 so far); everything else is the "document now,
-fix later" ledger. Each entry says where it is, what goes wrong, why, a proposed
-fix, and how we'd test it.
+marked **✅** inline (B1, B2, and B10 so far); everything else is the "document
+now, fix later" ledger. Each entry says where it is, what goes wrong, why, a
+proposed fix, and how we'd test it.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -41,23 +41,33 @@ JVM-only, see the coverage section).
   the handled-action set matches the service's `ACTION_*` constants. Full
   end-to-end (actual sticky-restart) remains device/instrumented-only.
 
-### B2 — Two alarms at the same minute: the second silently clobbers the first · High · Confirmed
-- **Where:** `AlarmService.handleRing` (`AlarmService.kt:78-101`) + `AlarmSession.start`
-  (`AlarmSession.kt`).
+### B2 — Two alarms at the same minute: the second silently clobbers the first · High · Confirmed · ✅ Fixed in 0.4.6
+- **Where:** `AlarmService.handleRing` + `AlarmSession.start` (`AlarmSession.kt`).
 - **What:** There is exactly one global `AlarmSession`. If alarm A is ringing (or
-  mid-routine) and alarm B fires, `handleRing(B)` sees a different id and calls
-  `AlarmSession.start(B)`, **overwriting A's state**. A's routine is abandoned:
-  its pending step-ring PendingIntent is orphaned and, for a recurring alarm, A
-  is never rescheduled from this path, so it can silently stop firing.
-- **Why:** The whole engine assumes a single active alarm; nothing serialises or
-  queues concurrent triggers.
-- **Proposed fix:** Decide the product behaviour first (most alarm apps: if one is
-  already active, the second is dropped or queued). Then guard `handleRing` so it
-  won't replace an active, different session — at minimum reschedule/preserve the
-  incoming alarm instead of losing it. Document the chosen semantics.
-- **How to test:** Unit-test a small "admission" policy object (activeAlarmId,
-  incomingAlarmId → {ring, ignore, queue}); it stays JVM-testable like
-  `ScanValidator`.
+  mid-routine) and alarm B fires, `handleRing(B)` saw a different id and called
+  `AlarmSession.start(B)`, **overwriting A's state**. A's routine was abandoned:
+  its pending step-ring PendingIntent orphaned and, for a recurring alarm, A never
+  rescheduled from this path (the reschedule only runs on completion), so it could
+  silently stop firing.
+- **Why:** The engine assumes a single active alarm; nothing serialised or preserved
+  a concurrent trigger.
+- **Fix (0.4.6):** `handleRing` now defers to a pure, unit-tested
+  `AlarmAdmissionPolicy.decide(activeAlarmId, incomingAlarmId)`. The alarm already
+  ringing **always wins**; a *different* incoming alarm is **deferred** — re-armed
+  ~60s later via the new `AlarmScheduler.scheduleRingAt` (reusing the alarm's own
+  ACTION_FIRE PendingIntent) — so it isn't lost and rings once the active alarm is
+  done (each retry simply defers again while the active one is still ringing). A
+  duplicate delivery of the *same* alarm re-rings its current step; an invalid id no
+  longer stops the service out from under an active alarm.
+- **Residual (narrow):** if two alarms fire within the DB-read latency of *each
+  other* (both before either claims the session), the admission decision is made
+  before `AlarmSession.start`, so a sub-second double-fire can still race — far
+  narrower than the reported "A already ringing when B fires" case this fixes. A
+  synchronous session reservation would close it; deferred to the B3 work.
+- **How it was tested:** `AlarmAdmissionPolicyTest` (JVM): no-active→RING_NEW,
+  same-id→RERING_CURRENT, different-id→DEFER_INCOMING, invalid id→INVALID (with and
+  without an active alarm), and the defer-time arithmetic. End-to-end two-alarm
+  collision remains device/instrumented-only. This is coverage gap **C4**.
 
 ### B3 — Awake-check re-ring interacts badly with a second alarm / recurring reschedule · Medium · Needs-device
 - **Where:** `AlarmService.completeRoutine` (`AlarmService.kt:208-237`),
@@ -71,8 +81,10 @@ JVM-only, see the coverage section).
   awake-check timeline widens the window to 10–30 min.
 - **Why:** Awake-check state (Room + AlarmManager) is per-alarm, but the ringing
   session is a singleton, so overlapping timelines aren't reconciled.
-- **Proposed fix:** Tie into whatever B2's admission policy decides; explicitly
-  define what happens when an awake check and a fresh ring collide.
+- **Proposed fix:** Extend B2's `AlarmAdmissionPolicy` (0.4.6) to the awake-check
+  timeline; explicitly define what happens when an awake check and a fresh ring
+  collide (the admission policy currently only guards the ringing session, not a
+  pending awake check).
 - **How to test:** Model the timeline transitions as pure state and unit-test the
   collision cases; full confidence needs an instrumented/manual run.
 
@@ -236,7 +248,7 @@ Composable. Anything needing an Android runtime is currently unverified.
 |---|---|---|---|---|
 | **C2** | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | Pure JVM tests with fixed `Calendar` + explicit `TimeZone` (incl. a DST zone like `America/New_York` around Mar/Nov), asserting spring-forward, fall-back, `candidate == now`, and "next enabled weekday" wrap | JVM | B9 |
 | **C1** | Emergency mini-game rules (idle reset counting, complete-once, alarm-stays-on after N idles) | Extract a pure `EmergencyGamePolicy` (taps, idle, resets → state) and unit-test it | JVM | B6 |
-| **C4** | Single-active-alarm / admission policy | New pure policy object (see B2) unit-tested for ring/ignore/queue | JVM | B2, B3 |
+| **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (done in 0.4.6 with B2) | JVM | B2 done; B3 still open |
 | **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
 | **C3** | Room: migrations 1→2→3→4 and `saveAlarm` atomicity + `usageCount`/RESTRICT delete guard | `androidTest` with in-memory DB (or Robolectric) — needs new test infra | Instrumented | B4 |
 | **C6** | `NumberStepperField` clamping / empty-field / round-trip behaviour | Extract the text↔value normalisation into a pure helper and unit-test; optional Compose UI test | JVM (+ optional UI) | — |
