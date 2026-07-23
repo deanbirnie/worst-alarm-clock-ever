@@ -20,11 +20,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,9 +35,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
-private const val TARGET_TAPS = 500
-private const val IDLE_TIMEOUT_MS = 30_000L
 private const val GRID = 4
+private const val TARGET_TAPS = EmergencyGamePolicy.TARGET_TAPS
 
 /**
  * Emergency disarm mini-game: a 4x4 grid where exactly one square lights up at a time;
@@ -57,22 +56,27 @@ fun EmergencyScreen(
     var taps by remember { mutableIntStateOf(0) }
     var litIndex by remember { mutableIntStateOf(Random.nextInt(GRID * GRID)) }
     var lastTapAtMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var completed by remember { mutableStateOf(false) }
 
-    // Idle watchdog.
+    // Idle watchdog — stops once the game is won so a post-completion idle can't fire a reset.
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
-            if (System.currentTimeMillis() - lastTapAtMs >= IDLE_TIMEOUT_MS) {
+            if (completed) return@LaunchedEffect
+            if (EmergencyGamePolicy.isIdleTimedOut(System.currentTimeMillis(), lastTapAtMs)) {
                 onIdleTimeout()
                 return@LaunchedEffect
             }
         }
     }
 
-    // If the user hits TARGET_TAPS, disarm.
-    DisposableEffect(taps) {
-        if (taps >= TARGET_TAPS) onComplete()
-        onDispose { }
+    // Fire onComplete exactly once (B6): latch behind `completed`, and the grid stops accepting
+    // taps at the target (see the tile's `enabled`), so taps can't advance to 501 and re-trigger.
+    LaunchedEffect(taps) {
+        if (!completed && EmergencyGamePolicy.isComplete(taps)) {
+            completed = true
+            onComplete()
+        }
     }
 
     Column(
@@ -132,13 +136,10 @@ fun EmergencyScreen(
                                         if (isLit) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.surfaceVariant
                                     )
-                                    .clickable(enabled = isLit) {
+                                    .clickable(enabled = isLit && EmergencyGamePolicy.acceptsTap(taps)) {
                                         taps += 1
                                         lastTapAtMs = System.currentTimeMillis()
-                                        // Pick a new index that isn't the current one.
-                                        var next = Random.nextInt(GRID * GRID - 1)
-                                        if (next >= litIndex) next += 1
-                                        litIndex = next
+                                        litIndex = EmergencyGamePolicy.nextLitIndex(litIndex, GRID * GRID)
                                     }
                             )
                         }
