@@ -2,9 +2,9 @@
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
 the whole codebase (first pass at v0.4.0; kept current since). Fixed / verified
-entries are marked **✅** inline (B1, B2, B5, B6, B9, B10, B11 so far); everything
-else is the "document now, fix later" ledger. Each entry says where it is, what goes
-wrong, why, a proposed fix, and how we'd test it.
+entries are marked **✅** inline (B1, B2, B5, B6, B7, B8, B9, B10, B11 so far);
+everything else is the "document now, fix later" ledger. Each entry says where it is,
+what goes wrong, why, a proposed fix, and how we'd test it.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -134,29 +134,45 @@ JVM-only, see the coverage section).
   thresholds, a simulation asserting completion fires exactly once under 600 tap attempts,
   idle-timeout boundary, and `nextLitIndex` (never the current cell, covers the rest).
 
-### B7 — `USE_EXACT_ALARM` + `SCHEDULE_EXACT_ALARM` both declared; neither is needed · Low · Needs-device
-- **Where:** `AndroidManifest.xml:7-8`.
-- **What:** Scheduling uses `AlarmManager.setAlarmClock`, which is exempt from the
-  exact-alarm permission. Declaring `USE_EXACT_ALARM` (a Play-policy-restricted
-  permission) may draw Play Console review scrutiny for no functional gain.
-- **Why:** Belt-and-braces permissions left in.
-- **Proposed fix:** Confirm on-device that `setAlarmClock` works without them,
-  then drop at least `USE_EXACT_ALARM`. (Revisit before the Play submission task in
-  RELEASING.md.)
-- **How to test:** Device check on API 31–34; not unit-testable.
+### B7 — Redundant `SCHEDULE_EXACT_ALARM` declared alongside `USE_EXACT_ALARM` · Low · Confirmed · ✅ Fixed in 0.4.9
+- **Where:** `AndroidManifest.xml`.
+- **What:** Both `SCHEDULE_EXACT_ALARM` (API 31) and `USE_EXACT_ALARM` (API 33) were
+  declared. Scheduling goes through `AlarmManager.setAlarmClock`, which is exempt from
+  the exact-alarm permission, so at least one was redundant.
+- **Correction to the original note:** the first pass suggested dropping
+  *`USE_EXACT_ALARM`*. That's backwards. `USE_EXACT_ALARM` is the modern,
+  install-granted "genuine alarm-clock app" permission, and — per Android 14's
+  behaviour change — being classified as an alarm app is what **auto-grants
+  `USE_FULL_SCREEN_INTENT`**, which the ringing screen relies on to surface over the
+  lock screen (see the full-screen work in 0.4.4). Dropping it could silently break
+  that. `SCHEDULE_EXACT_ALARM` is the one to drop: it's user-revocable,
+  denied-by-default on 14, and `setAlarmClock` never needs it.
+- **Fix (0.4.9):** Removed `SCHEDULE_EXACT_ALARM`; kept `USE_EXACT_ALARM` (justified —
+  this genuinely is an alarm clock, so it satisfies the Play "Exact Alarm API" policy).
+  No runtime code referenced `SCHEDULE_EXACT_ALARM` / `canScheduleExactAlarms`, so
+  nothing else changes. (Fully exiting the exact-alarm Play policy would mean dropping
+  `USE_EXACT_ALARM` too, which isn't worth risking the full-screen surfacing.)
+- **How to verify:** Device check on API 31–34 that alarms still fire (they should —
+  `setAlarmClock` is exempt) and that full-screen alarms still surface. Not
+  unit-testable; the manifest change is validated by CI's `assembleDebug`.
 
-### B8 — Silent awake-check popup starts a `mediaPlayback` foreground service · Low · Needs-device
-- **Where:** `AlarmService.onStartCommand` (`AlarmService.kt:53-58`) reached via
-  `ACTION_AWAKE_CHECK_SHOW`/`_TIMEOUT`.
-- **What:** Every start — including the silent awake-check popup, which plays no
-  audio — foregrounds the service as `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK`. On
-  Android 14 (targetSdk 34) the declared FGS type is supposed to match what the
-  service actually does; a media type with no playback is at least misleading and
-  could trip future FGS enforcement.
-- **Why:** One-size-fits-all `startForeground` type.
-- **Proposed fix:** Use an appropriate type (or a plain foreground notification)
-  for the non-audio awake-check starts; keep `mediaPlayback` only for actual
-  ringing. Confirm on a real device.
+### B8 — Awake-check start uses a `mediaPlayback` foreground service · Low · ✅ Re-assessed in 0.4.9 (no change — premise no longer holds)
+- **Where:** `AlarmService.onStartCommand` reached via `ACTION_AWAKE_CHECK_SHOW`/`_TIMEOUT`.
+- **Original concern:** every start foregrounds as `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK`,
+  and the awake-check popup "plays no audio", so the media type looked misleading and might
+  trip future FGS enforcement.
+- **Why it's no longer a real issue:** since the 0.4.4 gentle-nudge change, the awake-check
+  path **does** play audio — a soft notification chime (`MediaPlayer`, `USAGE_NOTIFICATION`)
+  plus vibration, repeating across the window. So `mediaPlayback` is now a defensible fit for
+  **both** paths (looping alarm audio when ringing; the nudge chime during a check). There is
+  no dedicated "alarm" FGS type; `mediaPlayback` (with the declared
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission) is the standard choice for alarm apps, and
+  Android 14 doesn't require a `MediaSession` for it.
+- **Decision:** keep `mediaPlayback`. Switching the awake-check start to another type
+  (`systemExempted`/`specialUse`) would add a permission and a Play declaration for marginal
+  semantic gain, and a wrong/mismatched type can make `startForeground` throw — which would
+  crash the **ringing** service, the one thing that must never fail. Not worth it without a
+  device to verify against. Revisit only if Play flags it or FGS enforcement tightens.
 - **How to test:** Device/instrumented; not unit-testable.
 
 ### B9 — Scheduler DST / weekday-mask correctness is assumed, not proven · Medium · ✅ Verified in 0.4.7 (no defect found)
@@ -301,7 +317,10 @@ Composable. Anything needing an Android runtime is currently unverified.
   clock forward) while an alarm is armed and confirm `TimeChangeReceiver` re-arms it so it
   still fires at the intended local time. Reproduce: arm an alarm a couple hours out → change
   the system timezone → check the next-alarm time.
-- B7 (redundant exact-alarm permissions) and B8 (mediaPlayback FGS type) from above.
+- **Exact-alarm permission (v0.4.9, B7):** confirm alarms still fire on API 31–34 after
+  dropping `SCHEDULE_EXACT_ALARM`, and that full-screen alarms still auto-surface (i.e.
+  `USE_EXACT_ALARM` alone keeps the app classified as an alarm app on 14). B8 (mediaPlayback
+  FGS type) was re-assessed and left as-is — see above.
 
 ### Cheapest high-value next steps
 1. ~~**C2** (scheduler DST)~~ — done in 0.4.7 (B9 verified correct; B11 receiver added).
