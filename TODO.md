@@ -247,6 +247,24 @@ things only when they're verified working.
   - **Needs on-device confirmation** (JVM/CI can't exercise this): set an alarm, lock/sleep the
     phone, and confirm the ringing screen appears over the lock screen without opening the app.
 
+## Phase 2.12 — Awake-check "I'm awake" did nothing (v0.4.5, reported 2026-07-23)
+
+- [x] Fix (regression from 2.11): tapping **"I'm awake" did nothing** when the popup was
+      surfaced by the notification's full-screen intent or by tapping the notification — exactly
+      the paths that run on a cold, locked-screen alarm. Those launches carried no
+      `EXTRA_ALARM_ID`, so the activity read `-1`, the dismiss it sent was dropped by
+      `handleAwakeCheckDismiss` (`alarmId <= 0`), the check was scored a miss, and the alarm
+      re-rang. See **BUGS.md B10**.
+  - Dismiss target now resolves from the live `AwakeCheckSession` (always set while a popup
+    shows, independent of launch path) via a new pure `AwakeCheckPolicy.resolveDismissTarget`,
+    intent extra as fallback. `EXTRA_ALARM_ID` is also embedded in the notification's
+    PendingIntents, and the dismiss uses `startForegroundService` (robust from over the lock
+    screen). Unit-tested in `AwakeCheckPolicyTest` (session wins / intent fallback / both-invalid).
+  - **Needs on-device confirmation:** tapping "I'm awake" — whether the popup auto-showed over
+    the lock screen or was opened from the notification — actually dismisses the check; and the
+    popup surfaces reliably (note: a full-screen intent only auto-launches full-screen while the
+    screen is locked/off — when the screen's already on it's a heads-up the user taps).
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > See **[BUGS.md](BUGS.md)** for the full bug backlog + test-coverage audit

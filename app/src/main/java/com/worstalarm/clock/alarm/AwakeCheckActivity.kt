@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.worstalarm.clock.ui.awakecheck.AwakeCheckScreen
 import com.worstalarm.clock.ui.theme.WorstAlarmTheme
@@ -43,7 +44,10 @@ class AwakeCheckActivity : ComponentActivity() {
             getSystemService(KeyguardManager::class.java)?.requestDismissKeyguard(this, null)
         }
 
-        val alarmId = intent.getLongExtra(AlarmService.EXTRA_ALARM_ID, -1L)
+        // Fallback only — see resolveDismissTarget. When the activity is surfaced by the
+        // notification's full-screen/content PendingIntent (cold, locked screen), this extra is
+        // absent (-1); the live AwakeCheckSession is the real source of truth.
+        val intentAlarmId = intent.getLongExtra(AlarmService.EXTRA_ALARM_ID, -1L)
 
         setContent {
             val state by AwakeCheckSession.state.collectAsState()
@@ -51,11 +55,21 @@ class AwakeCheckActivity : ComponentActivity() {
                 AwakeCheckScreen(
                     checkNumber = state?.checkNumber ?: 1,
                     onConfirm = {
-                        startService(
-                            Intent(this, AlarmService::class.java)
-                                .setAction(AlarmService.ACTION_AWAKE_CHECK_DISMISS)
-                                .putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
+                        val id = AwakeCheckPolicy.resolveDismissTarget(
+                            sessionAlarmId = AwakeCheckSession.state.value?.alarmId,
+                            intentAlarmId = intentAlarmId
                         )
+                        if (id > 0) {
+                            // startForegroundService (not startService): a start from over the
+                            // lock screen can be treated as a background start, and the service
+                            // promotes itself to foreground in onStartCommand anyway.
+                            ContextCompat.startForegroundService(
+                                this,
+                                Intent(this, AlarmService::class.java)
+                                    .setAction(AlarmService.ACTION_AWAKE_CHECK_DISMISS)
+                                    .putExtra(AlarmService.EXTRA_ALARM_ID, id)
+                            )
+                        }
                     }
                 )
             }

@@ -62,7 +62,13 @@ class AlarmService : Service() {
         // the device is asleep, so it must target the SAME screen this event shows: the awake
         // check's gentle popup for an awake-check show, the ringing lockdown for everything else.
         val notification = if (intent?.action == ACTION_AWAKE_CHECK_SHOW) {
-            buildNotification("Awake check", "Tap \"I'm awake\" to confirm you're up", AwakeCheckActivity::class.java)
+            // Carry the alarm id so the popup can dismiss the right check even when it's the
+            // full-screen/notification-tap launch that surfaces the activity (the receiver's
+            // direct launch isn't allowed from a cold, locked screen).
+            buildNotification(
+                "Awake check", "Tap \"I'm awake\" to confirm you're up",
+                AwakeCheckActivity::class.java, intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+            )
         } else {
             buildNotification("Alarm", "Waking you up…", AlarmActivity::class.java)
         }
@@ -541,10 +547,14 @@ class AlarmService : Service() {
     private fun buildNotification(
         title: String,
         text: String,
-        fullScreenTarget: Class<*> = AlarmActivity::class.java
+        fullScreenTarget: Class<*> = AlarmActivity::class.java,
+        alarmId: Long = -1L
     ): Notification {
         val openIntent = Intent(this, fullScreenTarget).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // AwakeCheckActivity reads this as a fallback for which check to dismiss; the alarm
+            // ringing UI (AlarmActivity) uses AlarmSession instead and ignores it.
+            if (alarmId > 0) putExtra(EXTRA_ALARM_ID, alarmId)
         }
         // Distinct request code per target so the two possible full-screen PendingIntents
         // (ringing lockdown vs awake-check popup) never alias each other under FLAG_UPDATE_CURRENT.

@@ -154,6 +154,31 @@ JVM-only, see the coverage section).
 - **How to test:** See coverage gap **C2** — it's pure and JVM-testable with a
   fixed `Calendar`/timezone.
 
+### B10 — "I'm awake" did nothing when the popup was launched from the notification/lock screen · High · Confirmed · ✅ Fixed in 0.4.5
+- **Where:** `AwakeCheckActivity` (`app/src/main/java/com/worstalarm/clock/alarm/AwakeCheckActivity.kt`)
+  + `AlarmService.buildNotification` (`AlarmService.kt`).
+- **What:** A **regression introduced in 0.4.4** by the full-screen-intent launch
+  (Phase 2.11). The awake-check popup can be surfaced three ways: the receiver's
+  direct `startActivity` (carries `EXTRA_ALARM_ID`), the foreground notification's
+  **full-screen intent**, and a **tap on that notification**. The latter two were
+  launched by a PendingIntent that carried **no** `EXTRA_ALARM_ID`, so the activity
+  read `-1`; tapping "I'm awake" sent `ACTION_AWAKE_CHECK_DISMISS` with id `-1`, and
+  `handleAwakeCheckDismiss` drops anything with `alarmId <= 0`. The button silently
+  did nothing, the check was scored a miss, and the alarm re-rang. Hit in the wild
+  on a cold, locked-screen alarm (reported 2026-07-23).
+- **Why:** The dismiss id came from the *launching intent*, which is absent on the
+  full-screen / notification-tap paths; the direct-launch path (which has it) is
+  blocked from a background/locked state, so the id-less paths are exactly the ones
+  that run when it matters.
+- **Fix (0.4.5):** Resolve the dismiss target from the live `AwakeCheckSession`
+  (always set while a popup shows, independent of launch path) via the new pure
+  `AwakeCheckPolicy.resolveDismissTarget`, with the intent extra as fallback; also
+  embed `EXTRA_ALARM_ID` in the notification's PendingIntents, and use
+  `startForegroundService` for the dismiss (robust from over the lock screen).
+- **How it was tested:** `AwakeCheckPolicyTest.resolveDismissTarget*` (session wins,
+  intent fallback, both-invalid → -1). End-to-end surfacing still needs a device
+  (see the device list below).
+
 ---
 
 ## Test-coverage audit
@@ -208,6 +233,13 @@ Composable. Anything needing an Android runtime is currently unverified.
   first unlock; the `moveDatabaseFrom` migration preserves existing alarms on upgrade;
   pre-unlock sound falls back to the system alarm tone when a custom tone is unreadable.
   Reproduce with: set an alarm a few minutes out → reboot → don't unlock.
+- **Full-screen alarm + awake check surfacing (v0.4.4/0.4.5):** the ringing UI appears
+  over the lock screen when the phone is asleep (needs `USE_FULL_SCREEN_INTENT`, and on
+  Android 14+ the in-app grant); tapping "I'm awake" on the popup — whether it auto-showed
+  or was opened from the notification — actually dismisses the check (B10). Note: a
+  full-screen intent only *auto-launches* full-screen while the screen is locked/off; when
+  the screen is already on it surfaces as a heads-up the user taps. Reproduce: alarm →
+  scan through → let the phone sleep → wait for the awake check.
 - B7 (redundant exact-alarm permissions) and B8 (mediaPlayback FGS type) from above.
 
 ### Cheapest high-value next steps

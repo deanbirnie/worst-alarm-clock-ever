@@ -109,6 +109,36 @@ class AwakeCheckPolicyTest {
     }
 
     @Test
+    fun `dismiss target prefers the live session id`() {
+        // Regression guard: the notification/full-screen launch path gives the activity no
+        // intent extra (-1); the session id must win so the button actually dismisses.
+        assertEquals(5L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = 5L, intentAlarmId = -1L))
+    }
+
+    @Test
+    fun `dismiss target falls back to the intent id when there is no session`() {
+        assertEquals(7L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = null, intentAlarmId = 7L))
+    }
+
+    @Test
+    fun `dismiss target is session id even when the intent also has one`() {
+        assertEquals(5L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = 5L, intentAlarmId = 7L))
+    }
+
+    @Test
+    fun `dismiss target ignores a non-positive session id and uses the intent`() {
+        assertEquals(7L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = 0L, intentAlarmId = 7L))
+        assertEquals(7L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = -1L, intentAlarmId = 7L))
+    }
+
+    @Test
+    fun `dismiss target is negative when neither source has a valid id`() {
+        // The button must send nothing (rather than a -1 the service would silently drop).
+        assertEquals(-1L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = null, intentAlarmId = -1L))
+        assertEquals(-1L, AwakeCheckPolicy.resolveDismissTarget(sessionAlarmId = 0L, intentAlarmId = 0L))
+    }
+
+    @Test
     fun `a full cycle is two dismissals from zero, not one`() {
         val first = AwakeCheckPolicy.onDismiss(0)
         check(first is AwakeCheckPolicy.DismissOutcome.ScheduleNext)

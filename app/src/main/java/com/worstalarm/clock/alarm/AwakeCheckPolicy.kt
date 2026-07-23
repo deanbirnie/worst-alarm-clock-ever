@@ -71,4 +71,22 @@ object AwakeCheckPolicy {
      */
     fun isGenuineMiss(persistedDeadlineAtMs: Long, timeoutFiredForDeadlineAtMs: Long): Boolean =
         persistedDeadlineAtMs != 0L && persistedDeadlineAtMs == timeoutFiredForDeadlineAtMs
+
+    /**
+     * The alarm id an "I'm awake" tap should dismiss.
+     *
+     * Regression guard (0.4.4→0.4.5): [AwakeCheckActivity] can be surfaced three ways — the
+     * receiver's direct launch (carries the id), the foreground notification's full-screen
+     * intent, and a tap on that notification. The latter two are launched by a PendingIntent
+     * that, before this fix, carried **no** id, so the activity read -1 and the dismiss it sent
+     * was silently dropped by [AlarmService.handleAwakeCheckDismiss] (`alarmId <= 0`) — the
+     * button "did nothing" and the check was scored a miss. So the live [AwakeCheckSession] (set
+     * the moment a popup is shown, independent of how the activity was launched) is the source of
+     * truth; the launching intent's extra is only a fallback. A non-positive result means "no
+     * active check to dismiss".
+     */
+    fun resolveDismissTarget(sessionAlarmId: Long?, intentAlarmId: Long): Long =
+        sessionAlarmId?.takeIf { it > 0 }
+            ?: intentAlarmId.takeIf { it > 0 }
+            ?: -1L
 }
