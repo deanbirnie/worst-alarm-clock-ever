@@ -1,9 +1,10 @@
 # Bug backlog & test-coverage audit
 
 A standing list of **potential bugs** and **test-coverage gaps** found by reading
-the whole codebase (as of v0.4.0). Nothing here is fixed yet — this is the
-"document now, fix later" ledger. Each entry says where it is, what goes wrong,
-why, a proposed fix, and how we'd test it.
+the whole codebase (first pass at v0.4.0; kept current since). Fixed entries are
+marked **✅** inline (B1 and B10 so far); everything else is the "document now,
+fix later" ledger. Each entry says where it is, what goes wrong, why, a proposed
+fix, and how we'd test it.
 
 Severity is about user impact on an alarm you're trusting to wake you:
 **High** = an alarm could fail to wake you or the app could get stuck;
@@ -178,6 +179,29 @@ JVM-only, see the coverage section).
 - **How it was tested:** `AwakeCheckPolicyTest.resolveDismissTarget*` (session wins,
   intent fallback, both-invalid → -1). End-to-end surfacing still needs a device
   (see the device list below).
+
+### B11 — Armed alarms aren't re-armed on a timezone / manual clock change · Medium · Confirmed
+- **Where:** `AndroidManifest.xml` (there is no time/timezone receiver); alarms are
+  only ever re-armed by `BootReceiver` (`BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` /
+  `MY_PACKAGE_REPLACED`) and at save time.
+- **What:** `AlarmScheduler` arms each alarm with `AlarmManager.setAlarmClock` at an
+  **absolute instant** computed from the wall-clock time and timezone in effect *when it
+  was armed*. If the user later changes timezone (travel) or sets the system clock, that
+  pinned instant no longer matches the intended local time — the alarm fires at the old
+  offset, which can be hours early or late. Nothing listens for
+  `ACTION_TIMEZONE_CHANGED` / `ACTION_TIME_CHANGED` to recompute and re-arm, and a
+  timezone change doesn't reboot, so the boot re-arm path never runs.
+- **Why:** Re-arming is tied to boot / package-replace / explicit save only; there is no
+  time- or timezone-change receiver.
+- **Proposed fix:** Add a `directBootAware` receiver for `ACTION_TIMEZONE_CHANGED` (and
+  `ACTION_TIME_CHANGED`) that re-arms all enabled alarms through the same path
+  `BootReceiver` uses. (A single armed alarm that merely *crosses* a DST boundary is
+  already resolved to the correct instant by `Calendar` at compute time — the gap here is
+  a genuine timezone/manual-clock change. DST *logic* correctness inside
+  `computeNextTriggerMs` is tracked separately in **B9**.)
+- **How to test:** The re-arm fan-out (enabled alarms → re-arm requests) is the same pure
+  logic BootReceiver drives and is JVM-testable; the receiver actually firing on a
+  timezone change is device-only.
 
 ---
 
