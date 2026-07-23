@@ -106,6 +106,20 @@
             </intent-filter>
         </receiver>
 
+        <!-- Re-arm alarms when the timezone or system clock changes (B11). setAlarmClock pins
+             an absolute instant; after travel / a manual clock change that instant points at the
+             wrong local time, and (unlike a reboot) nothing else re-arms it. These two actions
+             are protected system broadcasts that manifest-declared receivers may still receive. -->
+        <receiver
+            android:name=".alarm.TimeChangeReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
+
         <!-- Shares generated QR-code PNGs with other apps (print, save, send). -->
         <provider
             android:name="androidx.core.content.FileProvider"
