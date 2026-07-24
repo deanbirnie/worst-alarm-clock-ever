@@ -282,6 +282,25 @@ things only when they're verified working.
   - **Needs on-device confirmation:** during a multi-step alarm, confirm the next location's
     barcode won't register until its step rings, and that the SCAN button locks between steps.
 
+## Phase 2.14 — Full-screen surfacing troubleshooter (v0.5.3, reported 2026-07-24)
+
+- [x] Investigated "alarm rings but doesn't appear full-screen; I have to navigate to it". The
+      launch chain is **correct** (HIGH-importance channel, `CATEGORY_ALARM`/`PRIORITY_MAX`,
+      `setFullScreenIntent`, `showWhenLocked`/`turnScreenOn`, receiver direct-launch + FSI
+      fallback). A full-screen intent only **auto-launches over the lock screen** when the OS
+      allows it — gated by the Android 14+ full-screen-intent grant, "display over other apps",
+      and OEM lock-screen/autostart/battery settings — so it's a device-side grant issue, not a
+      code bug.
+- [x] Added an in-app **"Alarm won't show full-screen?"** troubleshooter (nav drawer): a dialog
+      showing live grant status (✓/✗) for full-screen notifications (14+) and display-over-other-
+      apps, deep-links to each, and points to the OEM app-settings page ("show on lock screen" /
+      autostart / unrestricted battery). New `MainActivity.openAppSettings`
+      (`ACTION_APPLICATION_DETAILS_SETTINGS`) threaded through `Navigation`.
+- [ ] **Possible follow-up if grants don't fix it:** on OEMs that allow overlay *windows* but
+      block background *activity* launches (MIUI-class), surface the existing `OverlayService`
+      window at ring time as a guaranteed lock-screen surface (with a settle-delay + an
+      `AlarmActivity`-is-showing guard so it never covers a working ringing screen).
+
 ## Phase 3 — Hardening (before giving it to anyone else)
 
 > **Bugs and test-coverage gaps now live in [BUGS.md](BUGS.md)** — that's the single

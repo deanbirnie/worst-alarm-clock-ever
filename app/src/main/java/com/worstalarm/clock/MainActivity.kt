@@ -30,7 +30,8 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Navigation(
                         onRequestOverlayPermission = ::openOverlaySettings,
-                        onRequestFullScreenIntentPermission = ::openFullScreenIntentSettings
+                        onRequestFullScreenIntentPermission = ::openFullScreenIntentSettings,
+                        onOpenAppSettings = ::openAppSettings
                     )
                 }
             }
@@ -72,6 +73,22 @@ class MainActivity : ComponentActivity() {
             startActivity(
                 Intent(
                     Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
+    }
+
+    // This app's own system settings page. On aggressive OEM skins (Samsung / Xiaomi / Oppo /
+    // Vivo / Realme) the toggles that let an alarm actually surface over the lock screen —
+    // "show on lock screen", "autostart", and unrestricted battery — live here, under app info.
+    // There's no single stable Intent for those OEM-specific screens, so this is the reliable
+    // universal landing point (see the full-screen troubleshooting dialog).
+    private fun openAppSettings() {
+        runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:$packageName")
                 )
             )

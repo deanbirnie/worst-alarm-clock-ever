@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -40,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -76,6 +80,7 @@ fun AlarmListScreen(
     onOpenAbout: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestFullScreenIntentPermission: () -> Unit,
+    onOpenAppSettings: () -> Unit,
     vm: AppViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -84,6 +89,7 @@ fun AlarmListScreen(
     // user returns from the relevant settings page after granting.
     var canDrawOverlays by remember { mutableStateOf(SystemSettings.canDrawOverlays(context)) }
     var canUseFullScreenIntent by remember { mutableStateOf(deviceCanUseFullScreenIntent(context)) }
+    var showTroubleshoot by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -107,6 +113,17 @@ fun AlarmListScreen(
             introDismissedThisSession = true
             if (dontShowAgain) vm.setIntroSeen(true)
         })
+    }
+
+    if (showTroubleshoot) {
+        FullScreenTroubleshootDialog(
+            canUseFullScreenIntent = canUseFullScreenIntent,
+            canDrawOverlays = canDrawOverlays,
+            onGrantFullScreenIntent = onRequestFullScreenIntentPermission,
+            onGrantOverlay = onRequestOverlayPermission,
+            onOpenAppSettings = onOpenAppSettings,
+            onDismiss = { showTroubleshoot = false }
+        )
     }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -148,6 +165,12 @@ fun AlarmListScreen(
                     icon = { Icon(Icons.Default.Info, contentDescription = null) },
                     selected = false,
                     onClick = { closeDrawerThen(onOpenAbout) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Alarm won't show full-screen?") },
+                    icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+                    selected = false,
+                    onClick = { closeDrawerThen { showTroubleshoot = true } }
                 )
             }
         }
@@ -281,6 +304,94 @@ private fun FullScreenIntentPermissionCard(onRequest: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onRequest) { Text("Open settings") }
         }
+    }
+}
+
+/**
+ * Walks the user through the device-side grants that let the alarm surface full-screen over the
+ * lock screen on its own. The code posts a correct full-screen-intent notification; whether it
+ * *auto-launches* is gated by (1) the Android 14+ full-screen-intent grant, (2) "display over
+ * other apps", and (3) OEM-specific lock-screen/autostart/battery settings. This consolidates all
+ * three with deep-links, reachable from the nav drawer.
+ */
+@Composable
+private fun FullScreenTroubleshootDialog(
+    canUseFullScreenIntent: Boolean,
+    canDrawOverlays: Boolean,
+    onGrantFullScreenIntent: () -> Unit,
+    onGrantOverlay: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val android14Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Alarm not showing full-screen?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "The alarm always rings and posts a notification, but Android decides whether " +
+                        "its full screen may pop up over your lock screen by itself. If you're " +
+                        "having to open the app or tap the notification, grant these — most phones " +
+                        "need at least one:",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(12.dp))
+                if (android14Plus) {
+                    TroubleStep(
+                        granted = canUseFullScreenIntent,
+                        title = "Full-screen notifications",
+                        body = "Android 14+ needs this granted per-app, or the alarm can only show as a notification.",
+                        button = "Open",
+                        onClick = onGrantFullScreenIntent
+                    )
+                }
+                TroubleStep(
+                    granted = canDrawOverlays,
+                    title = "Display over other apps",
+                    body = "Lets the alarm force itself to the front even when the launch is otherwise blocked.",
+                    button = "Open",
+                    onClick = onGrantOverlay
+                )
+                TroubleStep(
+                    granted = null,
+                    title = "Samsung / Xiaomi / Oppo / Vivo / Realme…",
+                    body = "In this app's system settings, allow \"Show on lock screen\" and \"Autostart\", " +
+                        "and set Battery to Unrestricted. The exact names vary by brand.",
+                    button = "App settings",
+                    onClick = onOpenAppSettings
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+@Composable
+private fun TroubleStep(
+    granted: Boolean?,
+    title: String,
+    body: String,
+    button: String,
+    onClick: () -> Unit
+) {
+    Column(Modifier.padding(bottom = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val (marker, color) = when (granted) {
+                true -> "✓ " to MaterialTheme.colorScheme.primary
+                false -> "✗ " to MaterialTheme.colorScheme.error
+                null -> "• " to MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Text(marker, color = color, fontWeight = FontWeight.Bold)
+            Text(title, fontWeight = FontWeight.SemiBold)
+        }
+        Text(
+            body,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(onClick = onClick) { Text(if (granted == true) "Re-check" else button) }
     }
 }
 
