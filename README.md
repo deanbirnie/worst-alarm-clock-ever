@@ -116,7 +116,9 @@ Three screens, kept deliberately simple:
 
 Plus the **ringing screen** you'll meet every morning: which location to scan,
 step progress, a giant SCAN BARCODE button that opens the camera, and the
-countdown between steps.
+countdown between steps. Each location's barcode only counts once that step
+rings — the SCAN button is locked during the countdown, so you can't run ahead
+and scan the whole path at once; the full pause between steps must expire first.
 
 ## Architecture
 

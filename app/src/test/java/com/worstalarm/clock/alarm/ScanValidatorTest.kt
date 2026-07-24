@@ -5,13 +5,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Regression tests for the reused-barcode step-skipping bug (v0.2.4).
+ * Tests for ScanValidator: the timed-step gate and the reused-barcode step-skipping guard.
  *
- * ML Kit reports a barcode once per camera frame it appears in, so one physical scan
- * can emit several SCAN_SUCCESS events. Before validation was added, the service
- * advanced one step per event: with the path bathroom(B) → kitchen(K) → bathroom(B) →
- * desk(D), a duplicate frame of the kitchen scan silently consumed the second bathroom
- * step and the routine went bathroom → kitchen → desk.
+ * Timed steps: a location's barcode only counts while that step is actually ringing. During the
+ * between-step countdown a scan is ignored, so you can't scan every location at once and go back
+ * to bed — each pause must expire first (`ringActive`).
+ *
+ * Reused-barcode guard (v0.2.4): ML Kit reports a barcode once per camera frame it appears in, so
+ * one physical scan can emit several SCAN_SUCCESS events. Before validation was added, the service
+ * advanced one step per event: with the path bathroom(B) → kitchen(K) → bathroom(B) → desk(D), a
+ * duplicate frame of the kitchen scan silently consumed the second bathroom step and the routine
+ * went bathroom → kitchen → desk.
  */
 class ScanValidatorTest {
 
@@ -30,8 +34,10 @@ class ScanValidatorTest {
         currentStepIndex: Int,
         scannedStepIndex: Int,
         scannedRaw: String?,
-        scannedFormat: Int = QR
+        scannedFormat: Int = QR,
+        ringActive: Boolean = true
     ): Decision = ScanValidator.decide(
+        ringActive = ringActive,
         currentStepIndex = currentStepIndex,
         totalSteps = path.size,
         expectedRawValue = path[currentStepIndex].raw,
@@ -107,6 +113,29 @@ class ScanValidatorTest {
         assertEquals(
             Decision.DISARM,
             decide(bathroomKitchenBathroomDesk, 3, 3, "DESK-CODE")
+        )
+    }
+
+    @Test
+    fun `a correct scan during the between-step countdown is ignored - no scanning ahead`() {
+        // Right barcode, right step index, but the step isn't ringing yet: the pause must elapse
+        // first, so you can't run around scanning every location at once and go back to bed.
+        assertEquals(
+            Decision.IGNORE,
+            decide(bathroomKitchenBathroomDesk, 1, 1, "KITCHEN-CODE", ringActive = false)
+        )
+        // Once the step actually rings, the identical scan is accepted.
+        assertEquals(
+            Decision.ADVANCE,
+            decide(bathroomKitchenBathroomDesk, 1, 1, "KITCHEN-CODE", ringActive = true)
+        )
+    }
+
+    @Test
+    fun `even the final step will not disarm before it rings`() {
+        assertEquals(
+            Decision.IGNORE,
+            decide(bathroomKitchenBathroomDesk, 3, 3, "DESK-CODE", ringActive = false)
         )
     }
 

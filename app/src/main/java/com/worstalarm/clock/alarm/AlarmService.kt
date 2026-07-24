@@ -175,8 +175,10 @@ class AlarmService : Service() {
         // Re-validate against the current step. The camera fires one event per frame the
         // barcode is visible in, so a single physical scan can emit several intents —
         // unchecked, each one advanced a step and silently skipped parts of the routine
-        // (the reused-barcode bug). See ScanValidator.
+        // (the reused-barcode bug). ringActive gates out scan-ahead during the countdown.
+        // See ScanValidator.
         val decision = ScanValidator.decide(
+            ringActive = s.isRingingNow,
             currentStepIndex = s.currentStepIndex,
             totalSteps = s.totalSteps,
             expectedRawValue = s.currentStep.barcode.rawValue,

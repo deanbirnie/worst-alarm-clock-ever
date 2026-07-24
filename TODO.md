@@ -44,7 +44,7 @@ things only when they're verified working.
 - [x] Custom alarm tone per alarm (falls back to global, then the system alarm sound)
 - [x] Hamburger menu (navigation drawer): Barcode library, QR generator, Settings, About
 - [x] Settings screen: global alarm sound picker, re-show welcome message
-- [x] Warn when adding a second location that the phone is unusable until the final barcode is scanned (scan ahead early, or use Emergency stop)
+- [x] Warn when adding a second location that the phone is unusable until the final barcode is scanned (warning updated in Phase 2.13 — the timed-scan change removed scan-ahead; Emergency stop remains the only early out)
 - [x] First-launch intro dialog explaining the path mechanism, with a "Do not show this again" checkbox (checked by default)
 - [x] Random QR code generator: create one or several codes, add them to the library, share/print as PNG
 - [x] About screen: app version, developer contact, source link, feature-suggestion box
@@ -264,6 +264,23 @@ things only when they're verified working.
     the lock screen or was opened from the notification — actually dismisses the check; and the
     popup surfaces reliably (note: a full-screen intent only auto-launches full-screen while the
     screen is locked/off — when the screen's already on it's a heads-up the user taps).
+
+## Phase 2.13 — Timed scanning: no scan-ahead (v0.5.2, requested 2026-07-24)
+
+- [x] Close the scan-ahead loophole: a location's barcode now only counts **while that step is
+      actively ringing**. During the between-step countdown a scan is ignored, so you can't run
+      around scanning every location at once and go back to bed — the full pause you set must
+      expire before the next location's barcode will register.
+  - `ScanValidator.decide` gains a `ringActive` gate (returns `IGNORE` when the step isn't
+    ringing); `AlarmService.handleScanSuccess` passes `s.isRingingNow`. Authoritative in the
+    service, so the rule holds even if the UI is bypassed. Unit-tested in `ScanValidatorTest`
+    (countdown scan ignored, same scan accepted once it rings, final step won't disarm early).
+  - Ringing UI: the SCAN button is **disabled during the countdown** and reads
+    "LOCKED — WAIT FOR THE RING"; Emergency stop stays available as the only early out.
+  - Copy: the "Adding a second location" warning rewritten (it used to *advertise* scan-ahead),
+    plus the first-launch intro, README, and DESIGN updated to match.
+  - **Needs on-device confirmation:** during a multi-step alarm, confirm the next location's
+    barcode won't register until its step rings, and that the SCAN button locks between steps.
 
 ## Phase 3 — Hardening (before giving it to anyone else)
 

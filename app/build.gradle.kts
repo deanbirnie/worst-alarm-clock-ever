@@ -12,8 +12,8 @@ android {
         applicationId = "com.worstalarm.clock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 24
-        versionName = "0.5.1"
+        versionCode = 25
+        versionName = "0.5.2"
         vectorDrawables.useSupportLibrary = true
     }
 

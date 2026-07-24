@@ -70,6 +70,7 @@ class AlarmSessionTest {
         val state = AlarmSession.state.value!!
 
         val decision = ScanValidator.decide(
+            ringActive = state.isRingingNow, // start() rings the pinned step immediately
             currentStepIndex = state.currentStepIndex,
             totalSteps = state.totalSteps,
             expectedRawValue = state.currentStep.barcode.rawValue,
