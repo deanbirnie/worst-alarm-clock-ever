@@ -130,9 +130,10 @@ fun AlarmEditScreen(
                     "With more than one location, your phone stays locked to the alarm " +
                         "between steps — you won't be able to use it normally until the " +
                         "final location's barcode is scanned.\n\n" +
-                        "If you need out early, you can scan ahead through your path " +
-                        "without waiting for the pauses, or use the Emergency stop " +
-                        "(500 taps)."
+                        "Each location's barcode only counts once that step rings: after you " +
+                        "scan one, the full pause you set must expire before the next location " +
+                        "can be scanned — you can't run ahead and scan them all at once.\n\n" +
+                        "If you're genuinely stuck, use the Emergency stop (500 taps)."
                 )
             },
             confirmButton = {

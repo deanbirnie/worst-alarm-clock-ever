@@ -482,8 +482,11 @@ centered horizontally:
   "Next ring in M:SS" in `Bold`/`secondary`.
 - **Bottom group** (full width, 12dp gaps): a giant primary `Button`,
   72dp tall, full-width, containing "SCAN BARCODE" at 22sp Bold — this is
-  the dominant, unmissable action. Below it, a 56dp-tall full-width
-  `OutlinedButton`: "EMERGENCY STOP (500 taps)".
+  the dominant, unmissable action. **While a step is only counting down (not
+  ringing yet), this button is disabled** and reads "LOCKED — WAIT FOR THE
+  RING" at 16sp: a location's barcode only counts once its step rings, so the
+  path can't be scanned ahead. Below it, a 56dp-tall full-width `OutlinedButton`:
+  "EMERGENCY STOP (500 taps)" (always enabled).
 
 ### 9.2 Scanning panel
 

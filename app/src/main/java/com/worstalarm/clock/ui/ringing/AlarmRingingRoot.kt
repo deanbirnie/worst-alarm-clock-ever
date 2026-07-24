@@ -201,13 +201,24 @@ private fun RingingPanel(
             Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Scanning is locked during the between-step countdown — a location's barcode only
+            // counts once that step actually rings, so you can't run ahead and scan them all at
+            // once. The service enforces this too (ScanValidator.ringActive); disabling the button
+            // just makes the rule visible.
             Button(
                 onClick = onScan,
+                enabled = state.isRingingNow,
                 modifier = Modifier.fillMaxWidth().height(72.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
-            ) { Text("SCAN BARCODE", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+            ) {
+                Text(
+                    if (state.isRingingNow) "SCAN BARCODE" else "LOCKED — WAIT FOR THE RING",
+                    fontSize = if (state.isRingingNow) 22.sp else 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
             OutlinedButton(
                 onClick = onEmergency,

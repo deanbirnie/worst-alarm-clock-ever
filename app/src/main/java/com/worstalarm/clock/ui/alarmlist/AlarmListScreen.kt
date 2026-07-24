@@ -233,7 +233,9 @@ private fun IntroDialog(onDone: (dontShowAgain: Boolean) -> Unit) {
                         "registered and scan it with the camera.\n\n" +
                         "The real magic is the path: give one alarm several locations — " +
                         "bathroom, kitchen, desk — and it re-rings at each one after a " +
-                        "quiet break, walking you through your whole morning routine.\n\n" +
+                        "quiet break, walking you through your whole morning routine. " +
+                        "Each location only counts once it rings, so you can't dash round " +
+                        "and scan them all at once.\n\n" +
                         "Start in the menu: add barcodes to your library (or generate " +
                         "printable QR codes), then create an alarm."
                 )
