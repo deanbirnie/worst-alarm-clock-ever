@@ -243,7 +243,12 @@ class AlarmService : Service() {
             // Process was killed mid-routine — restart the routine from the top rather
             // than staying silent.
             handleRing(alarmId)
-        } else {
+        } else if (ForegroundStartPolicy.shouldStop(
+                sessionActive = AlarmSession.isActive,
+                awakeActive = AwakeCheckSession.state.value != null
+            )
+        ) {
+            // Nothing to ring and no awake-check to nurse — don't sit in the foreground (B1/C5).
             stopSelfSafely()
         }
     }

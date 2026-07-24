@@ -266,6 +266,8 @@ JVM-only, see the coverage section).
 | `QrCodeGeneratorTest` | QR code id uniqueness + value dedupe (B5) |
 | `EmergencyGamePolicyTest` | Emergency mini-game: complete-once, tap gate, idle timeout, lit-cell move (B6/C1) |
 | `AlarmPersistenceTest` | **Robolectric + in-memory Room**: `saveAlarm` atomicity, ordered steps, step replacement, CASCADE delete, barcode-in-use guard (B4/C3) |
+| `ForegroundStartPolicyTest` | Keep-foreground-vs-stop invariant: stop only when neither a ring nor an awake-check is active (C5) |
+| `NumberStepperInputTest` | Digit-field normalisation: digits-only, length cap, empty → min, clamping (C6) |
 | `AwakeCheckPolicyTest` | Awake-check intervals, dismiss transitions, stale-timeout guard |
 | `AlarmSessionTest` | Session start + final-step pin for miss re-ring |
 | `NextRingFormatterTest` | "Rings in …" formatting + a few scheduler paths (non-DST) |
@@ -294,9 +296,9 @@ There are still no instrumented (`androidTest`) tests.
 | **C2** ✅ | `computeNextTriggerMs` DST + exact-minute + weekday-mask edges | `AlarmSchedulerNextTriggerTest` — fixed `Calendar` + `America/New_York` spring-forward & fall-back, `candidate == now`, weekday wrap (done 0.4.7 with B9) | JVM | B9 done |
 | **C1** ✅ | Emergency mini-game rules (complete-once, tap gate, idle timeout, lit-cell move) | `EmergencyGamePolicyTest` — done in 0.4.8 with B6 | JVM | B6 done |
 | **C4** ✅ | Single-active-alarm / admission policy | `AlarmAdmissionPolicyTest` — ring / re-ring / defer / invalid (B2, 0.4.6) + awake-check collision rules (B3, 0.5.1) | JVM | B2 & B3 done |
-| **C5** | Foreground-start decision (keep foreground vs stop) | Pure function over `(action, sessionActive, awakeActive)`; unit-test incl. null action | JVM | B1 |
+| **C5** ✅ | Foreground-start decision (keep foreground vs stop) | `ForegroundStartPolicyTest` — stop only when neither a ring nor an awake-check is active; wired into `handleStepRing` (done 0.5.5) | JVM | B1 |
 | **C3** ◑ | Room: `saveAlarm` atomicity + CASCADE + `usageCount` guard **done** (`AlarmPersistenceTest`, Robolectric, 0.5.0); migrations 1→2→3→4 **still open** (needs `exportSchema` + committed schema JSONs) | Robolectric / JVM | B4 done |
-| **C6** | `NumberStepperField` clamping / empty-field / round-trip behaviour | Extract the text↔value normalisation into a pure helper and unit-test; optional Compose UI test | JVM (+ optional UI) | — |
+| **C6** ✅ | `NumberStepperField` clamping / empty-field / round-trip behaviour | `NumberStepperInputTest` — extracted `NumberStepperInput` (sanitize / valueOf / clamp), unit-tested (done 0.5.5) | JVM | — |
 | **C7** | `AlarmService` state machine (ring → scan → step → complete → awake → miss re-ring) | Instrumented or a refactor that drives the transitions through a pure reducer | Instrumented / refactor | B1, B2, B3 |
 | **C8** | Compose smoke tests (list renders, toggle persists, editor saves, day bubbles fit) | `androidTest` with Compose test rule — needs new test infra | Instrumented | — |
 
@@ -338,6 +340,7 @@ There are still no instrumented (`androidTest`) tests.
    (`AlarmPersistenceTest`). Remaining C3: enable `exportSchema` and add migration tests.
 4. ~~**B3** (awake-check ↔ second-alarm collision)~~ — done in 0.5.1 (admission policy extended
    to the awake-check timeline). **The B1–B11 audit is fully closed.**
-5. What's left is coverage, not bugs: Room **migration** tests (needs `exportSchema`), an
-   `AlarmService` state-machine test (**C7**), Compose smoke tests (**C8**), and the small pure
-   extracts **C5** (foreground-start keep-vs-stop) and **C6** (`NumberStepperField`).
+5. ~~The small pure extracts **C5** (foreground-start keep-vs-stop) and **C6**
+   (`NumberStepperField`)~~ — done in 0.5.5. What's left is the heavier coverage: Room
+   **migration** tests (needs `exportSchema`), an `AlarmService` state-machine test (**C7**),
+   and Compose smoke tests (**C8**).

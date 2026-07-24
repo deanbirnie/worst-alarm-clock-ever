@@ -54,7 +54,7 @@ fun NumberStepperField(
     }
 
     fun commit(newValue: Int) {
-        val clamped = newValue.coerceIn(min, max)
+        val clamped = NumberStepperInput.clamp(newValue, min, max)
         val text = clamped.toString()
         fieldValue = TextFieldValue(text, selection = TextRange(text.length))
         onValueChange(clamped)
@@ -75,9 +75,9 @@ fun NumberStepperField(
             OutlinedTextField(
                 value = fieldValue,
                 onValueChange = { new ->
-                    val digits = new.text.filter(Char::isDigit).take(3)
+                    val digits = NumberStepperInput.sanitize(new.text)
                     fieldValue = new.copy(text = digits)
-                    onValueChange((digits.toIntOrNull() ?: min).coerceIn(min, max))
+                    onValueChange(NumberStepperInput.valueOf(digits, min, max))
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
