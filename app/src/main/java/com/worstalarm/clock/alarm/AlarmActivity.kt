@@ -114,6 +114,19 @@ class AlarmActivity : ComponentActivity() {
         if (AlarmSession.isActive) startOverlayIfAllowed()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Mark the ringing UI visible so the overlay fallback (OverlayService) knows the real
+        // activity surfaced and suppresses itself. onStart (not onResume) so it stays true behind
+        // a system dialog — e.g. the camera-permission prompt — which the overlay must not cover.
+        isShowing = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isShowing = false
+    }
+
     override fun onResume() {
         super.onResume()
         // Stop the overlay — we're the foreground now.
@@ -123,5 +136,15 @@ class AlarmActivity : ComponentActivity() {
     private fun startOverlayIfAllowed() {
         if (!Settings.canDrawOverlays(this)) return
         startService(Intent(this, OverlayService::class.java))
+    }
+
+    companion object {
+        /**
+         * True while this activity is at least started (visible). The alarm-surfacing fallback
+         * ([OverlayService]) reads this after a short settle delay: if the ringing activity came
+         * up on its own (the normal case on most devices), the overlay never draws.
+         */
+        @Volatile
+        var isShowing: Boolean = false
     }
 }

@@ -296,10 +296,14 @@ things only when they're verified working.
       apps, deep-links to each, and points to the OEM app-settings page ("show on lock screen" /
       autostart / unrestricted battery). New `MainActivity.openAppSettings`
       (`ACTION_APPLICATION_DETAILS_SETTINGS`) threaded through `Navigation`.
-- [ ] **Possible follow-up if grants don't fix it:** on OEMs that allow overlay *windows* but
-      block background *activity* launches (MIUI-class), surface the existing `OverlayService`
-      window at ring time as a guaranteed lock-screen surface (with a settle-delay + an
-      `AlarmActivity`-is-showing guard so it never covers a working ringing screen).
+- [x] **Ring-time overlay fallback (general, v0.5.4):** on OEMs that allow overlay *windows* but
+      block background *activity* launches (ColorOS/Oppo, MIUI, …), `AlarmService.ringCurrentStep`
+      now asks `OverlayService` to surface at ring time (`EXTRA_AS_FALLBACK`). It waits
+      `FALLBACK_SETTLE_MS` (1.5s) and draws **only if `AlarmActivity.isShowing` is still false** —
+      i.e. only if the real ringing screen didn't come up. On the majority of devices the activity
+      surfaces normally, so the overlay self-cancels and nothing extra is drawn (no regression).
+      Needs "display over other apps" granted; the overlay's CONTINUE button (a user tap) launches
+      the full scan UI. **Needs on-device confirmation on a restrictive OEM (e.g. the Oppo A60).**
 
 ## Phase 3 — Hardening (before giving it to anyone else)
 

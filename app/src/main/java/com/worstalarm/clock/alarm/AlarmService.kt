@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -167,6 +168,25 @@ class AlarmService : Service() {
             "Alarm ringing",
             "Scan: ${s.currentStep.displayName}"
         )
+        surfaceAlarmUiFallback()
+    }
+
+    /**
+     * Ask [OverlayService] to surface the alarm over the lock screen as a **delayed fallback**. On
+     * most devices the ringing activity (via the full-screen intent / direct launch) comes up on
+     * its own and the overlay self-cancels — nothing extra is drawn. On OEMs that block the
+     * background *activity* launch but still allow an overlay *window* (ColorOS, MIUI, …), this is
+     * what puts a full-screen alarm on the lock screen, with a tap-through to the scan UI. No-ops
+     * without the "display over other apps" permission.
+     */
+    private fun surfaceAlarmUiFallback() {
+        if (!Settings.canDrawOverlays(this)) return
+        runCatching {
+            startService(
+                Intent(this, OverlayService::class.java)
+                    .putExtra(OverlayService.EXTRA_AS_FALLBACK, true)
+            )
+        }
     }
 
     private fun handleScanSuccess(intent: Intent) {
