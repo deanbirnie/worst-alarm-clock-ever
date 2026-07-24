@@ -24,7 +24,8 @@ object Routes {
 @Composable
 fun Navigation(
     onRequestOverlayPermission: () -> Unit,
-    onRequestFullScreenIntentPermission: () -> Unit
+    onRequestFullScreenIntentPermission: () -> Unit,
+    onOpenAppSettings: () -> Unit
 ) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = Routes.AlarmList) {
@@ -37,7 +38,8 @@ fun Navigation(
                 onOpenSettings = { nav.navigate(Routes.Settings) },
                 onOpenAbout = { nav.navigate(Routes.About) },
                 onRequestOverlayPermission = onRequestOverlayPermission,
-                onRequestFullScreenIntentPermission = onRequestFullScreenIntentPermission
+                onRequestFullScreenIntentPermission = onRequestFullScreenIntentPermission,
+                onOpenAppSettings = onOpenAppSettings
             )
         }
         composable(Routes.BarcodeLibrary) {

@@ -216,6 +216,17 @@ theme).
 - **OEM battery killers.** Aggressive vendors (Xiaomi, Oppo, some Samsung
   modes) can delay even `setAlarmClock`. If alarms are late, exempt the app
   from battery optimization in system settings.
+- **Full-screen surfacing depends on OS grants.** The alarm always rings and
+  posts its notification, but whether the ringing screen *auto-appears over the
+  lock screen* is gated by the OS: the Android 14+ full-screen-intent grant,
+  "display over other apps", and OEM lock-screen/autostart settings. If the
+  alarm rings but you have to open the app or tap the notification, use the
+  **"Alarm won't show full-screen?"** item in the nav drawer — it shows which
+  grants are missing and deep-links straight to them. As a general fallback (for
+  OEMs like ColorOS/MIUI that block the background activity launch but allow
+  overlay windows), if "display over other apps" is granted the app surfaces a
+  full-screen overlay over the lock screen at ring time — but only when the normal
+  ringing screen doesn't come up on its own, so most devices never see it.
 - **Awake check details beyond the on/off toggle aren't independently
   configurable.** The 90-second dismiss window and "a miss resets both
   checks, not just the missed one" are fixed behavior, not settled

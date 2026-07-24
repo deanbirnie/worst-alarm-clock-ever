@@ -5,7 +5,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -16,27 +18,45 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Full-screen re-assert overlay shown if the user manages to background [AlarmActivity]
- * while an alarm is still active. Covers the screen and intercepts all touches; the only
- * usable control is a "CONTINUE" button that brings the alarm UI back to the foreground.
+ * Full-screen overlay that surfaces the alarm over the lock screen. Covers the screen and
+ * intercepts all touches; the only usable control is a "CONTINUE" button that brings the alarm
+ * UI to the foreground. It serves two jobs:
  *
- * Requires the user to grant the "Display over other apps" permission
- * ([Settings.canDrawOverlays]). If the permission isn't granted this service silently
- * no-ops — the alarm is still playing via [AlarmService] and the fullScreenIntent on
- * the notification, so the user can still reach the alarm.
+ *  1. **Re-assert** (immediate): shown if the user backgrounds [AlarmActivity] while an alarm is
+ *     still active (see `AlarmActivity.onUserLeaveHint`).
+ *  2. **Ring-time fallback** ([EXTRA_AS_FALLBACK], delayed): on devices/OEMs that block the
+ *     background *activity* launch but still allow an overlay *window* (e.g. ColorOS, MIUI), the
+ *     ringing screen may not appear on its own. [AlarmService] asks for this overlay at ring time;
+ *     after a short settle it draws **only if [AlarmActivity] didn't come up** ([AlarmActivity.isShowing]).
+ *     On the majority of devices the activity surfaces normally, so this path self-cancels and
+ *     nothing extra is drawn.
+ *
+ * Requires the "Display over other apps" permission ([Settings.canDrawOverlays]); without it this
+ * service silently no-ops — the alarm still plays and its fullScreenIntent notification stands.
  */
 class OverlayService : Service() {
 
     private var overlayView: View? = null
     private var windowManager: WindowManager? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
-        if (!AlarmSession.isActive) { stopSelf(); return START_NOT_STICKY }
-        showOverlay()
-        return START_STICKY
+        if (!Settings.canDrawOverlays(this) || !AlarmSession.isActive) {
+            stopSelf(); return START_NOT_STICKY
+        }
+        if (intent?.getBooleanExtra(EXTRA_AS_FALLBACK, false) == true) {
+            // Give the real activity a moment to surface (full-screen intent / direct launch);
+            // draw only if it didn't. This is what keeps normal devices untouched.
+            handler.removeCallbacksAndMessages(null)
+            handler.postDelayed({
+                if (AlarmSession.isActive && !AlarmActivity.isShowing) showOverlay() else stopSelf()
+            }, FALLBACK_SETTLE_MS)
+        } else {
+            showOverlay()
+        }
+        return START_NOT_STICKY
     }
 
     private fun showOverlay() {
@@ -106,7 +126,16 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         hideOverlay()
         super.onDestroy()
+    }
+
+    companion object {
+        /** Start extra: draw only as a *delayed fallback* if the ringing activity doesn't surface. */
+        const val EXTRA_AS_FALLBACK = "as_fallback"
+
+        /** How long to wait for the real activity before falling back to the overlay window. */
+        private const val FALLBACK_SETTLE_MS = 1500L
     }
 }
